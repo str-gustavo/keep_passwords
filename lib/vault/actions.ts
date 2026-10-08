@@ -117,7 +117,9 @@ export async function uploadAttachment(recordId: string, file: File): Promise<Va
   const blob = await encryptBytes(r.key, new Uint8Array(await file.arrayBuffer()));
   const { id } = await api.upload<{ id: string; size: number }>(`/api/records/${recordId}/attachments`, blob);
   const meta: AttachmentMeta = { id, name: file.name, size: file.size, mime: file.type || 'application/octet-stream' };
-  return updateRecord(recordId, { ...r.data, attachments: [...r.data.attachments, meta] });
+  // Re-read after the await: the record may have been saved meanwhile, and the pre-upload snapshot would undo that.
+  const fresh = requireRecord(recordId);
+  return updateRecord(recordId, { ...fresh.data, attachments: [...fresh.data.attachments, meta] });
 }
 export async function downloadAttachment(recordId: string, meta: AttachmentMeta): Promise<Blob> {
   const r = requireRecord(recordId);
@@ -125,9 +127,11 @@ export async function downloadAttachment(recordId: string, meta: AttachmentMeta)
   return new Blob([new Uint8Array(bytes)], { type: meta.mime });
 }
 export async function deleteAttachment(recordId: string, attachmentId: string): Promise<VaultRecord> {
-  const r = requireRecord(recordId);
+  requireRecord(recordId);
   await api.delete(`/api/records/${recordId}/attachments/${attachmentId}`);
-  return updateRecord(recordId, { ...r.data, attachments: r.data.attachments.filter((a) => a.id !== attachmentId) });
+  // Re-read after the await so a save or upload that landed meanwhile is kept.
+  const fresh = requireRecord(recordId);
+  return updateRecord(recordId, { ...fresh.data, attachments: fresh.data.attachments.filter((a) => a.id !== attachmentId) });
 }
 
 export async function changeMasterPassword(current: string, next: string): Promise<string> {

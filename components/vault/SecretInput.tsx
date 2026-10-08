@@ -10,17 +10,19 @@ import { IconButton } from './IconButton';
 interface Props {
   id: string; value: string; onChange: (value: string) => void; label: string; testId: string;
   placeholder?: string; describedBy?: string; invalid?: boolean; multiline?: boolean;
+  /** `new-password` for password/secret kinds, so browsers do not autofill saved logins into them. */
+  autoComplete?: 'off' | 'new-password';
 }
 
 /**
  * Masked input with a show/hide toggle. The multiline variant masks a textarea with `-webkit-text-security`.
- * Spellcheck, autocorrect and autofill are off so the browser never sends or stores the secret.
+ * Spellcheck and autocorrect are off so the browser never sends the secret to a spelling service.
  */
-export function SecretInput({ id, value, onChange, label, testId, placeholder, describedBy, invalid, multiline }: Props) {
+export function SecretInput({ id, value, onChange, label, testId, placeholder, describedBy, invalid, multiline, autoComplete = 'off' }: Props) {
   const [revealed, setRevealed] = useState(false);
   const common = {
     id, value, placeholder, 'aria-describedby': describedBy, 'aria-invalid': invalid || undefined,
-    autoComplete: 'off', autoCorrect: 'off', autoCapitalize: 'off', spellCheck: false,
+    autoComplete: multiline ? 'off' : autoComplete, autoCorrect: 'off', autoCapitalize: 'off', spellCheck: false,
   } as const;
   const toggleLabel = `${revealed ? t.hide : t.show} ${label}`;
 

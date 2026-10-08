@@ -274,5 +274,5 @@ export const t = {
   attachmentUploadFailed: 'Não foi possível enviar o anexo',
   uploading: 'Enviando…',
   uploadQueued: 'Na fila',
-  waitForUploads: 'Aguarde o envio dos anexos para salvar.',
+  waitForUploads: 'Aguarde o envio dos anexos',
 } as const;

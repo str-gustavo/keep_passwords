@@ -7,7 +7,8 @@ import { toast } from '@/components/ui/Toast';
 import { ApiClientError } from '@/lib/api/client';
 import { t } from '@/lib/i18n/pt-br';
 import { getRecordType, type RecordTypeId } from '@/lib/record-types/catalog';
-import { createRecord, updateRecord } from '@/lib/vault/actions';
+import type { AttachmentMeta } from '@/lib/record-types/record-data';
+import { createRecord, deleteAttachment, updateRecord } from '@/lib/vault/actions';
 import { dataForSave, firstInvalidKey, formReducer, initialFormState, isFormDirty, validateForm, type FormAction } from '@/lib/vault/record-form-state';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
@@ -17,6 +18,7 @@ import { fieldInputId } from './FieldInput';
 import { FormFields } from './FormFields';
 import { TypeIcon } from './TypeIcon';
 import { TypePicker } from './TypePicker';
+import { useFormDialogGuards } from './use-form-dialog-guards';
 
 const FORM_ID = 'record-form';
 const errorKeyOf = (a: FormAction) => (a.type === 'field' ? a.key : a.type === 'title' || a.type === 'notes' ? a.type : null);
@@ -24,7 +26,8 @@ const without = (e: Record<string, string>, key: string) => { const next = { ...
 
 /**
  * Create/edit dialog. New records start with the type picker (step 1); in edit mode the type is fixed.
- * Closing a form with unsaved edits asks "Descartar alterações?" first.
+ * Closing a form with unsaved edits asks "Descartar alterações?" first; closing is refused while attachments are
+ * being uploaded or deleted, and while saving.
  */
 export function RecordForm({ mode, record, folderId = null, onClose }: { mode: 'new' | 'edit'; record?: VaultRecord; folderId?: string | null; onClose: () => void }) {
   const editing = mode === 'edit' ? record : undefined;
@@ -35,24 +38,33 @@ export function RecordForm({ mode, record, folderId = null, onClose }: { mode: '
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [toDelete, setToDelete] = useState<AttachmentMeta | null>(null);
   const [discardPrompt, setDiscardPrompt] = useState(false);
   // Escape closes the native <dialog> before onClose runs; `hidden` mirrors that so the form can be shown again.
   const [hidden, setHidden] = useState(false);
   const [, setSelected] = useSelectedRecordId();
   const bodyRef = useRef<HTMLDivElement>(null);
   const typeDef = getRecordType(state.data.type);
+  const attachmentsBusy = uploading || deleting;
+  useFormDialogGuards(attachmentsBusy);
 
   const dispatch = (a: FormAction) => {
     dispatchRaw(a);
     const key = errorKeyOf(a);
     if (key) setErrors((e) => (key in e ? without(e, key) : e));
   };
-  const syncNativeClose = () => { if (!bodyRef.current?.closest('dialog')?.open) setHidden(true); };
+  const nativeOpen = () => bodyRef.current?.closest('dialog')?.open ?? false;
 
   function requestClose() {
-    if (saving) { syncNativeClose(); return; }
+    if (saving) { if (!nativeOpen()) setHidden(true); return; }
+    if (attachmentsBusy) {
+      // Refused: the footer says to wait. If Escape already closed the native dialog, show it again.
+      if (!nativeOpen()) { setHidden(true); requestAnimationFrame(() => setHidden(false)); }
+      return;
+    }
     if (!isFormDirty(initial, state.data)) { onClose(); return; }
-    syncNativeClose();
+    if (!nativeOpen()) setHidden(true);
     setDiscardPrompt(true);
   }
 
@@ -64,11 +76,14 @@ export function RecordForm({ mode, record, folderId = null, onClose }: { mode: '
   }
 
   async function save() {
-    if (saving || uploading) return;
+    if (saving || attachmentsBusy) return;
     const found = validateForm(state);
     setErrors(found);
-    const first = firstInvalidKey(state, found);
-    if (first) { document.getElementById(fieldInputId(first))?.focus(); return; }
+    if (Object.keys(found).length > 0) {
+      const first = firstInvalidKey(state, found);
+      if (first) document.getElementById(fieldInputId(first))?.focus();
+      return;
+    }
     setSaving(true);
     try {
       const data = dataForSave(state);
@@ -96,9 +111,9 @@ export function RecordForm({ mode, record, folderId = null, onClose }: { mode: '
         open={!hidden} onClose={requestClose} title={editing ? t.editRecord : t.newRecord} wide
         footer={(
           <>
-            {uploading && <p className="mr-auto self-center text-xs text-fg-muted">{t.waitForUploads}</p>}
-            <Button type="button" variant="secondary" data-testid="record-cancel" disabled={saving} onClick={requestClose}>{t.cancel}</Button>
-            {!choosingType && <Button type="submit" form={FORM_ID} data-testid="record-save" loading={saving} disabled={uploading}>{t.save}</Button>}
+            {attachmentsBusy && <p role="status" className="mr-auto self-center text-xs text-fg-muted">{t.waitForUploads}</p>}
+            <Button type="button" variant="secondary" data-testid="record-cancel" disabled={saving || attachmentsBusy} onClick={requestClose}>{t.cancel}</Button>
+            {!choosingType && <Button type="submit" form={FORM_ID} data-testid="record-save" loading={saving} disabled={attachmentsBusy}>{t.save}</Button>}
           </>
         )}
       >
@@ -122,17 +137,31 @@ export function RecordForm({ mode, record, folderId = null, onClose }: { mode: '
               <FormFields state={state} dispatch={dispatch} errors={errors} />
               <section aria-labelledby="record-attachments-title" className="space-y-3">
                 <h3 id="record-attachments-title" className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{t.attachments}</h3>
-                <AttachmentsEditor recordId={editing?.id ?? null} attachments={editing?.data?.attachments ?? []} onBusyChange={setUploading} />
+                <AttachmentsEditor
+                  recordId={editing?.id ?? null} attachments={editing?.data?.attachments ?? []} onBusyChange={setUploading} onDelete={setToDelete}
+                />
               </section>
             </form>
           )}
         </div>
       </Dialog>
+      {/* Confirmations are siblings of the record dialog, never nested in it or in its <form>. */}
       <ConfirmDialog
         open={discardPrompt} title={t.discardChangesTitle} description={t.discardChangesText} confirmLabel={t.discard}
         confirmTestId="record-discard-confirm"
         onClose={() => { setDiscardPrompt(false); setHidden(false); }}
         onConfirm={async () => onClose()}
+      />
+      <ConfirmDialog
+        open={toDelete !== null} title={t.deleteAttachmentTitle} confirmLabel={t.delete} confirmTestId="form-attachment-confirm-delete"
+        description={<>{t.deleteAttachmentText} <span className="font-medium text-fg">{toDelete?.name}</span></>}
+        onClose={() => setToDelete(null)}
+        onConfirm={async () => {
+          if (!editing || !toDelete) return;
+          setDeleting(true);
+          try { await deleteAttachment(editing.id, toDelete.id); toast.success(t.attachmentDeleted); }
+          finally { setDeleting(false); }
+        }}
       />
     </>
   );

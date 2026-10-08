@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
@@ -12,9 +12,16 @@ import { IconButton } from './IconButton';
 import { SecretInput } from './SecretInput';
 
 const labelId = (i: number) => `record-custom-label-${i}`;
+let rowSeq = 0;
+const newRowId = () => `custom-row-${++rowSeq}`;
 
 /** Editable custom fields: `custom-label-<i>`, kind (Texto/Secreto), `custom-value-<i>`, remove; `custom-add` appends a row. */
 export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]; dispatch: (action: FormAction) => void }) {
+  // React keys parallel to `fields`: adding or removing a row never remounts (or re-masks) the other rows.
+  const [ids, setIds] = useState<string[]>(() => fields.map(() => newRowId()));
+  const rowIds = fields.map((_, i) => ids[i] ?? `custom-row-fallback-${i}`);
+  const add = () => { setIds((x) => [...x, newRowId()]); dispatch({ type: 'customAdd' }); };
+  const remove = (index: number) => { setIds((x) => x.filter((_, j) => j !== index)); dispatch({ type: 'customRemove', index }); };
   const count = useRef(fields.length);
   useEffect(() => {
     // A row was just added: put the cursor in its name.
@@ -32,8 +39,7 @@ export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]
             const valueId = `record-custom-value-${i}`;
             const name = c.label.trim() || `${t.customField} ${i + 1}`;
             return (
-              // Keyed by index and count so a removal never hands one row's reveal state to the next row.
-              <li key={`${i}:${fields.length}`} className="grid gap-2 rounded-lg border border-border bg-surface-2 p-3 sm:grid-cols-[minmax(0,1fr)_7.5rem_minmax(0,1.3fr)_auto] sm:items-end">
+              <li key={rowIds[i]} className="grid gap-2 rounded-lg border border-border bg-surface-2 p-3 sm:grid-cols-[minmax(0,1fr)_7.5rem_minmax(0,1.3fr)_auto] sm:items-end">
                 <div>
                   <Label htmlFor={labelId(i)}>{t.customFieldLabel}</Label>
                   <Input id={labelId(i)} data-testid={`custom-label-${i}`} value={c.label} maxLength={200} autoComplete="off" onChange={(e) => set({ label: e.target.value })} />
@@ -48,12 +54,12 @@ export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]
                 <div>
                   <Label htmlFor={valueId}>{t.customFieldValue}</Label>
                   {c.kind === 'secret' ? (
-                    <SecretInput id={valueId} testId={`custom-value-${i}`} value={c.value} label={name} onChange={(value) => set({ value })} />
+                    <SecretInput id={valueId} testId={`custom-value-${i}`} value={c.value} label={name} onChange={(value) => set({ value })} autoComplete="new-password" />
                   ) : (
                     <Input id={valueId} data-testid={`custom-value-${i}`} value={c.value} autoComplete="off" onChange={(e) => set({ value: e.target.value })} />
                   )}
                 </div>
-                <IconButton label={`${t.removeCustomField} ${name}`} title={t.removeCustomField} tone="danger" onClick={() => dispatch({ type: 'customRemove', index: i })} className="h-10 w-10 justify-self-end">
+                <IconButton label={`${t.removeCustomField} ${name}`} title={t.removeCustomField} tone="danger" onClick={() => remove(i)} className="h-10 w-10 justify-self-end">
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </IconButton>
               </li>
@@ -61,7 +67,7 @@ export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]
           })}
         </ul>
       )}
-      <Button type="button" variant="secondary" size="sm" data-testid="custom-add" onClick={() => dispatch({ type: 'customAdd' })}>
+      <Button type="button" variant="secondary" size="sm" data-testid="custom-add" onClick={add}>
         <Plus className="h-4 w-4" aria-hidden="true" />{t.addCustomField}
       </Button>
     </section>

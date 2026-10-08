@@ -26,8 +26,8 @@ export function ConfirmDialog({ open, title, description, confirmLabel, confirmT
       title={title}
       footer={(
         <>
-          <Button variant="secondary" onClick={onClose} disabled={busy}>{t.cancel}</Button>
-          <Button variant="danger" data-testid={confirmTestId} loading={busy} onClick={() => { void confirm(); }}>{confirmLabel}</Button>
+          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>{t.cancel}</Button>
+          <Button type="button" variant="danger" data-testid={confirmTestId} loading={busy} onClick={() => { void confirm(); }}>{confirmLabel}</Button>
         </>
       )}
     >

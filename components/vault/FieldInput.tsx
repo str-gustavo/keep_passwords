@@ -30,7 +30,7 @@ export function FieldInput({ def, value, onChange, error }: { def: FieldDef; val
         <>
           <div className="flex items-center gap-2">
             <div className="min-w-0 flex-1">
-              <SecretInput id={id} value={value} onChange={onChange} label={def.label} testId={testId} describedBy={describedBy} invalid={!!error} />
+              <SecretInput id={id} value={value} onChange={onChange} label={def.label} testId={testId} describedBy={describedBy} invalid={!!error} autoComplete="new-password" />
             </div>
             <GeneratorPopover onPick={onChange} />
           </div>
@@ -44,7 +44,7 @@ export function FieldInput({ def, value, onChange, error }: { def: FieldDef; val
       control = (
         <SecretInput
           id={id} value={value} onChange={onChange} label={def.label} testId={testId} describedBy={describedBy} invalid={!!error}
-          placeholder={def.kind === 'totp' ? 'otpauth://totp/...' : undefined}
+          placeholder={def.kind === 'totp' ? 'otpauth://totp/...' : undefined} autoComplete={def.kind === 'secret' ? 'new-password' : 'off'}
         />
       );
       break;

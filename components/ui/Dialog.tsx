@@ -13,7 +13,8 @@ export function Dialog({ open, onClose, title, children, footer, wide }: { open:
     if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) onClose();
   };
   return (
-    <dialog ref={ref} onClose={onClose} onClick={onBackdropClick} className={`m-auto w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-xl border border-border bg-surface p-0 text-fg shadow-xl backdrop:bg-black/50`}>
+    // React bubbles `close` through the component tree: ignore the close of a dialog nested inside this one.
+    <dialog ref={ref} onClose={(e) => { if (e.target === e.currentTarget) onClose(); }} onClick={onBackdropClick} className={`m-auto w-full ${wide ? 'max-w-2xl' : 'max-w-md'} rounded-xl border border-border bg-surface p-0 text-fg shadow-xl backdrop:bg-black/50`}>
       <div className="flex items-center justify-between border-b border-border px-5 py-3">
         <h2 className="text-base font-semibold">{title}</h2>
         <button type="button" aria-label="Fechar" onClick={onClose} className="rounded p-1 hover:bg-surface-2"><X className="h-4 w-4" /></button>

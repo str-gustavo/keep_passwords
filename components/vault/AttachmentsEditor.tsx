@@ -8,8 +8,7 @@ import { t } from '@/lib/i18n/pt-br';
 import type { AttachmentMeta } from '@/lib/record-types/record-data';
 import { cn } from '@/lib/ui/cn';
 import { formatBytes } from '@/lib/ui/format';
-import { deleteAttachment, MAX_ATTACHMENT_PLAINTEXT, uploadAttachment } from '@/lib/vault/actions';
-import { ConfirmDialog } from './ConfirmDialog';
+import { MAX_ATTACHMENT_PLAINTEXT, uploadAttachment } from '@/lib/vault/actions';
 import { IconButton } from './IconButton';
 
 interface Queued { key: number; file: File }
@@ -19,15 +18,15 @@ const INPUT_ID = 'record-attachment-input';
 /**
  * Attachments of a saved record. Files are encrypted and uploaded right away, strictly one at a time: each upload
  * rewrites the record's attachment list, so concurrent uploads would overwrite each other's metadata.
- * `recordId === null` (record not saved yet) shows a hint instead. `onBusyChange` reports a non-empty queue.
+ * `recordId === null` (record not saved yet) shows a hint instead. `onBusyChange` reports a non-empty queue;
+ * `onDelete` asks the parent to confirm and delete (the confirmation lives outside the record dialog).
  */
-export function AttachmentsEditor({ recordId, attachments, onBusyChange }: {
-  recordId: string | null; attachments: AttachmentMeta[]; onBusyChange: (busy: boolean) => void;
+export function AttachmentsEditor({ recordId, attachments, onBusyChange, onDelete }: {
+  recordId: string | null; attachments: AttachmentMeta[]; onBusyChange: (busy: boolean) => void; onDelete: (attachment: AttachmentMeta) => void;
 }) {
   const [pending, setPending] = useState<Queued[]>([]);
   const [activeKey, setActiveKey] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
-  const [toDelete, setToDelete] = useState<AttachmentMeta | null>(null);
   const queue = useRef<Queued[]>([]);
   const running = useRef(false);
   const busy = pending.length > 0;
@@ -90,7 +89,7 @@ export function AttachmentsEditor({ recordId, attachments, onBusyChange }: {
               </div>
               <IconButton
                 data-testid={`form-attachment-delete-${a.id}`} label={`${t.delete} ${a.name}`} title={t.delete} tone="danger"
-                disabled={busy} onClick={() => setToDelete(a)}
+                disabled={busy} onClick={() => onDelete(a)}
               >
                 <Trash2 className="h-4 w-4" aria-hidden="true" />
               </IconButton>
@@ -109,7 +108,7 @@ export function AttachmentsEditor({ recordId, attachments, onBusyChange }: {
       )}
 
       <div
-        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; setDragging(true); }}
         onDragLeave={() => setDragging(false)}
         onDrop={(e) => { e.preventDefault(); setDragging(false); enqueue(Array.from(e.dataTransfer.files)); }}
       >
@@ -129,17 +128,6 @@ export function AttachmentsEditor({ recordId, attachments, onBusyChange }: {
           <span className="text-xs text-fg-muted">{t.attachmentsLimit}</span>
         </label>
       </div>
-
-      <ConfirmDialog
-        open={toDelete !== null} title={t.deleteAttachmentTitle} confirmLabel={t.delete} confirmTestId="form-attachment-confirm-delete"
-        description={<>{t.deleteAttachmentText} <span className="font-medium text-fg">{toDelete?.name}</span></>}
-        onClose={() => setToDelete(null)}
-        onConfirm={async () => {
-          if (!toDelete) return;
-          await deleteAttachment(recordId, toDelete.id);
-          toast.success(t.attachmentDeleted);
-        }}
-      />
     </div>
   );
 }
