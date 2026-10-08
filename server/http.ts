@@ -37,3 +37,10 @@ export async function param(ctx: RouteContext, name: string): Promise<string> {
   if (!v) throw new ApiError(400, 'validation', 'Parâmetro ausente');
   return v;
 }
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+export async function uuidParam(ctx: RouteContext, name: string): Promise<string> {
+  const v = await param(ctx, name);
+  if (!UUID_RE.test(v)) throw new ApiError(404, 'not_found', 'Registro não encontrado');
+  return v;
+}
