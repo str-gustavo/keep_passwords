@@ -9,7 +9,7 @@ import { importPrivateKey } from '@app/crypto/rsa';
 import { emptyRecordData, touchPasswordDates, type RecordData } from '@app/record-types/record-data';
 import { decryptVault } from '@app/vault/decrypt';
 import { EMAIL_KEY, REFRESH_MIN_MS, SEARCH_LIMIT } from '@/shared/constants';
-import { hostOf, urlsMatch } from '@/shared/domain';
+import { hostOf, originOf, urlsMatch } from '@/shared/domain';
 import { ExtError } from '@/shared/errors';
 import type { MatchItem } from '@/shared/messages';
 import { ExtApi, ExtApiError } from './api';
@@ -56,13 +56,6 @@ async function toLite(r: DecryptedRecord): Promise<VaultRecordLite | null> {
     id: r.id, type: r.type, title: r.data.title, login: f.login ?? '', password: f.password ?? '', url: f.url ?? '', totp: f.totp ?? '',
     permission: r.access.permission, updatedAt: r.updatedAt, data: r.data, recordKeyRaw: toBase64(await exportAesKey(r.key)),
   };
-}
-
-/** The stored record URL: the origin of an http(s) URL (no path or query that could carry tokens), '' otherwise. */
-function recordUrl(url: string): string {
-  const raw = url.trim();
-  if (!hostOf(raw)) return '';
-  return new URL(raw.includes('://') ? raw : `https://${raw}`).origin;
 }
 
 // ---------------------------------------------------------------------------------------------------------------
@@ -162,7 +155,7 @@ async function download(force: boolean, seq: number): Promise<void> {
 /** Creates a login record (fresh record key wrapped by the data key) and refreshes the vault; resolves to its id. */
 export async function saveNewRecord(args: { url: string; login: string; password: string; title: string }): Promise<string> {
   const s = await requireUnlocked();
-  const url = recordUrl(args.url);
+  const url = originOf(args.url) ?? ''; // the stored record URL: no path or query that could carry tokens
   const fields: Record<string, string> = {};
   if (args.login) fields.login = args.login;
   if (args.password) fields.password = args.password;

@@ -1,10 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handle } from '@/sw/router';
-import { loadSession, saveSession, stateOf } from '@/sw/session';
+import { loadSession, saveSession, signOutSession, stateOf } from '@/sw/session';
 import * as vault from '@/sw/vault';
 import { ExtApiError } from '@/sw/api';
 import { SERVER_KEY } from '@/shared/constants';
 import type { Req } from '@/shared/messages';
+import { ExtError } from '@/shared/errors';
 import { MOCK_EXTENSION_ID, addTab, getChromeMock, resetChromeMock } from './helpers/chrome-mock';
 import { pageSender, popupSender, r, secrets, user } from './helpers/fixtures';
 
@@ -329,12 +330,50 @@ const getPending = (url: string, tabId = 7, frameUrl = url) => handle({ type: 'g
 const storedPending = async () => (await loadSession()).pending;
 
 describe('savePending', () => {
-  it('stores the capture for the sender tab (origin only), counts as activity and answers nothing secret', async () => {
+  it('stores the capture for the sender tab (origin only), answers nothing secret and does not count as activity', async () => {
+    // A page can fire synthetic submits: they must never keep the vault unlocked.
     const before = Date.now() - 30_000;
     await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: before });
     await expect(submit('https://github.com/login?return_to=/x', 'bob', 'captured-pw')).resolves.toEqual({ ok: true, data: null });
     expect(await storedPending()).toMatchObject({ url: 'https://github.com', host: 'github.com', login: 'bob', password: 'captured-pw', kind: 'new', existingId: null, tabId: 7 });
-    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
+    expect((await loadSession()).lastActivity).toBe(before);
+  });
+
+  it('caps the lengths of what a page sends', async () => {
+    await unlocked();
+    const url = 'https://github.com/login';
+    const INVALID_MSG = { ok: false, error: 'Mensagem inválida' };
+    await expect(submit(url, 'a'.repeat(1025), 'b')).resolves.toEqual(INVALID_MSG);
+    await expect(submit(url, 'a', 'b'.repeat(4097))).resolves.toEqual(INVALID_MSG);
+    const longUrl = `${url}?q=${'x'.repeat(2048)}`;
+    await expect(handle({ type: 'savePending', url: longUrl, login: 'a', password: 'b' }, pageSender(url))).resolves.toEqual(INVALID_MSG);
+    expect(await storedPending()).toBeNull();
+    await expect(submit(url, 'a'.repeat(1024), 'b'.repeat(4096))).resolves.toEqual({ ok: true, data: null });
+    expect(await storedPending()).not.toBeNull();
+    await expect(handle({ type: 'saveNew', title: 't'.repeat(501) }, pageSender(url))).resolves.toEqual(INVALID_MSG);
+    await expect(handle({ type: 'saveNew', title: 't', url: longUrl, password: 'p' }, popupSender)).resolves.toEqual(INVALID_MSG);
+    await expect(handle({ type: 'updatePassword', id: '1', password: 'p'.repeat(4097) }, popupSender)).resolves.toEqual(INVALID_MSG);
+    expect(vault.saveNewRecord).not.toHaveBeenCalled();
+    expect(vault.updateRecordPassword).not.toHaveBeenCalled();
+  });
+
+  it('never stores a capture into a session that was signed out (or switched account) meanwhile', async () => {
+    await unlocked();
+    // The never-list read happens between the status check and the write: sign out right there.
+    getChromeMock().storage.local.get.mockImplementationOnce(async () => {
+      await signOutSession();
+      return {};
+    });
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    expect(await storedPending()).toBeNull();
+
+    await unlocked();
+    getChromeMock().storage.local.get.mockImplementationOnce(async () => {
+      await saveSession({ token: 't2', user: { ...user, id: 'other-user' } });
+      return {};
+    });
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    expect(await storedPending()).toBeNull();
   });
 
   it('refuses a payload url that is not the sender page (or frame), without storing or touching', async () => {
@@ -459,6 +498,34 @@ describe('saveNew', () => {
     expect(await storedPending()).not.toBeNull();
   });
 
+  it('claims the capture before saving: a double click creates one record', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    const req: Req = { type: 'saveNew', title: 'x' };
+    const results = await Promise.all([handle(req, pageSender('https://github.com/')), handle(req, pageSender('https://github.com/'))]);
+    expect(results).toEqual(expect.arrayContaining([{ ok: true, data: { id: 'new-id' } }, NOTHING_PENDING]));
+    await expect(handle(req, pageSender('https://github.com/'))).resolves.toEqual(NOTHING_PENDING);
+    expect(vault.saveNewRecord).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a stale "new" capture whose login exists by now instead of duplicating it', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await saveSession({ vault: [github, r({ id: '5', url: 'https://github.com', login: 'bob', password: 'other' })] });
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://github.com/'))).resolves.toEqual(NOTHING_PENDING);
+    expect(vault.saveNewRecord).not.toHaveBeenCalled();
+    expect(await storedPending()).toBeNull();
+  });
+
+  it('gives the capture back when saving fails, so the user can retry', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    vi.mocked(vault.saveNewRecord).mockRejectedValueOnce(new ExtError('Servidor indisponível'));
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://github.com/'))).resolves.toEqual({ ok: false, error: 'Servidor indisponível' });
+    expect(await storedPending()).toMatchObject({ login: 'bob', password: 'captured-pw', tabId: 7 });
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://github.com/'))).resolves.toEqual({ ok: true, data: { id: 'new-id' } });
+  });
+
   it('from the popup uses its payload', async () => {
     await unlocked();
     const req: Req = { type: 'saveNew', url: 'https://banco.com.br/login', login: 'z', password: 'pz', title: 'Banco 2' };
@@ -502,6 +569,29 @@ describe('updatePassword', () => {
     await expect(handle({ type: 'updatePassword', id: '3' }, pageSender('https://github.com/'))).resolves.toEqual(NOTHING_PENDING);
     await expect(handle({ type: 'updatePassword', id: '1' }, pageSender('https://github.com/', 8))).resolves.toEqual(NOTHING_PENDING);
     expect(vault.updateRecordPassword).not.toHaveBeenCalled();
+  });
+
+  it('claims the capture before writing: a double click updates once; a capture made moot is dropped', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'ana', 'new-pw');
+    const req: Req = { type: 'updatePassword', id: '1' };
+    const results = await Promise.all([handle(req, pageSender('https://github.com/')), handle(req, pageSender('https://github.com/'))]);
+    expect(results).toEqual(expect.arrayContaining([{ ok: true, data: null }, NOTHING_PENDING]));
+    expect(vault.updateRecordPassword).toHaveBeenCalledTimes(1);
+
+    await submit('https://github.com/login', 'ana', 'newer-pw');
+    await saveSession({ vault: [{ ...github, password: 'newer-pw' }, bank] }); // updated elsewhere meanwhile
+    await expect(handle(req, pageSender('https://github.com/'))).resolves.toEqual(NOTHING_PENDING);
+    expect(vault.updateRecordPassword).toHaveBeenCalledTimes(1);
+    expect(await storedPending()).toBeNull();
+  });
+
+  it('gives the capture back when the update fails', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'ana', 'new-pw');
+    vi.mocked(vault.updateRecordPassword).mockRejectedValueOnce(new ExtError('Servidor indisponível'));
+    await expect(handle({ type: 'updatePassword', id: '1' }, pageSender('https://github.com/'))).resolves.toEqual({ ok: false, error: 'Servidor indisponível' });
+    expect(await storedPending()).toMatchObject({ login: 'ana', password: 'new-pw' });
   });
 
   it('from the popup uses its payload', async () => {

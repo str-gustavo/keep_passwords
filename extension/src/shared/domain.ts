@@ -33,6 +33,13 @@ export function hostOf(url: string): string | null {
   }
 }
 
+/** The origin (scheme, host, port) of an http(s) URL — never its path or query, which may carry tokens; null when hostOf rejects it. */
+export function originOf(url: string): string | null {
+  const raw = url.trim();
+  if (!hostOf(raw)) return null;
+  return new URL(HAS_SCHEME.test(raw) ? raw : `https://${raw}`).origin;
+}
+
 // Host-only matching by design: scheme and port are ignored so a record saved
 // for https://site.com also offers itself on http://site.com and on any port.
 export function urlsMatch(recordUrl: string | undefined, pageUrl: string): boolean {

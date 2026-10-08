@@ -19,7 +19,7 @@ import { serverOrigin } from '@/shared/server-url';
 import { captureChecked, dropPending, isNeverHost, neverForSite, pendingFor, sameLogin, summarize } from './pending';
 import {
   checkAutoLock, clearSession, loadSession, lockSession, requireUnlocked, saveSession, signOutSession, stateOf, statusOf, touch,
-  type SessionData, type VaultRecordLite,
+  updateSession, type SessionData, type UnlockedSession, type VaultRecordLite,
 } from './session';
 import { READ_ONLY_MESSAGE, findRecord, loadVault, matches, saveNewRecord, search, signIn, unlock, updateRecordPassword } from './vault';
 
@@ -55,19 +55,49 @@ function recordFor(r: VaultRecordLite, o: Origin): void {
 function extensionOnly(o: Origin): asserts o is ExtensionOrigin {
   if (o.kind !== 'extension') throw new ExtError(INVALID_ORIGIN);
 }
-/** Page-originated actions extend the session only once they passed validation (popup requests are touched up front). */
+/**
+ * Page-originated actions extend the session only once they passed validation (popup requests are touched up front).
+ * savePending and getPending never do: a page can fire synthetic submits and reloads, which must not keep the vault
+ * unlocked; only the user's own clicks in the save bar (save, update, dismiss, never) count as activity.
+ */
 const touchFromPage = (o: Origin) => (o.kind === 'page' ? touch() : Promise.resolve());
+
 /** The credential this page's tab captured: same tab, same site (tab and frame), not expired. */
 function pendingOfPage(s: SessionData, o: PageOrigin): Pending | null {
   if (o.tabId === undefined) return null;
   const p = pendingFor(s, o.tabUrl, Date.now(), o.tabId);
   return p && allowedFor(p.url, o) ? p : null;
 }
+/** Statuses that keep a capture (locked too: the save bar then asks to unlock). */
+const keepsCaptures = (s: SessionData) => statusOf(s) === 'unlocked' || statusOf(s) === 'locked';
+
+/**
+ * Takes this page's capture for a save-bar action. It is re-checked against the vault (it must still be the `kind` the
+ * bar offered, else it is dropped as moot) and removed from the session BEFORE the network round trip, so a double
+ * click or two tabs cannot save it twice.
+ */
+async function claimPending(s: SessionData, o: PageOrigin, kind: Pending['kind'], fits: (p: Pending) => boolean = () => true): Promise<Pending> {
+  const p = pendingOfPage(s, o);
+  if (!p || !fits(p)) throw new ExtError(NOTHING_PENDING);
+  const current = summarize(s, p, false);
+  if (!current || current.kind !== kind) {
+    await dropPending(p);
+    throw new ExtError(NOTHING_PENDING);
+  }
+  if (!(await dropPending(p))) throw new ExtError(NOTHING_PENDING); // claimed by a concurrent request
+  return p;
+}
+/** Gives a claimed capture back after a failed save, so the user can retry — unless locked, signed out or re-captured meanwhile. */
+const restorePending = (p: Pending, s: UnlockedSession) =>
+  updateSession((c) => (!c.pending && statusOf(c) === 'unlocked' && c.user?.id === s.user.id ? { pending: p } : null)).catch(() => false);
 
 // Runtime shape check (content scripts live in page renderers; never trust the payload's types). Being a mapped type
 // over Req['type'], it also stops compiling when a message is added without a validator.
 const isStr = (v: unknown): v is string => typeof v === 'string';
-const optStr = (v: unknown): boolean => v === undefined || isStr(v);
+// Bounds on what a page may hand over for storage (a title above 500 would not even decrypt in the web app).
+const MAX = { url: 2048, login: 1024, password: 4096, title: 500 } as const;
+const within = (v: unknown, max: number): boolean => isStr(v) && v.length <= max;
+const optWithin = (v: unknown, max: number): boolean => v === undefined || within(v, max);
 const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = {
   getState: () => true,
   setServer: (m) => isStr(m.url),
@@ -82,12 +112,12 @@ const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = 
   fillRequest: (m) => isStr(m.id),
   totpFor: (m) => isStr(m.id),
   revealPassword: (m) => isStr(m.id),
-  savePending: (m) => isStr(m.url) && isStr(m.login) && isStr(m.password),
+  savePending: (m) => within(m.url, MAX.url) && within(m.login, MAX.login) && within(m.password, MAX.password),
   getPending: () => true,
   discardPending: () => true,
   neverForSite: (m) => isStr(m.host),
-  saveNew: (m) => isStr(m.title) && optStr(m.url) && optStr(m.login) && optStr(m.password),
-  updatePassword: (m) => isStr(m.id) && optStr(m.password),
+  saveNew: (m) => within(m.title, MAX.title) && optWithin(m.url, MAX.url) && optWithin(m.login, MAX.login) && optWithin(m.password, MAX.password),
+  updatePassword: (m) => isStr(m.id) && optWithin(m.password, MAX.password),
   generatePassword: (m) => typeof m.opts === 'object' && m.opts !== null,
   openPopup: () => true,
   fillFromPopup: (m) => isStr(m.id) && Number.isInteger(m.tabId),
@@ -227,21 +257,20 @@ async function route(req: Req, o: Origin): Promise<Res> {
 
     // ---- captured credentials (a page only ever sees its own tab's capture, and never its password) ----
     case 'savePending': {
+      // No touch(): a synthetic submit must not keep the vault unlocked.
       if (o.kind !== 'page' || o.tabId === undefined) throw new ExtError(INVALID_ORIGIN);
       if (!allowedFor(req.url, o)) throw new ExtError(NOT_THIS_SITE);
       const s = await loadSession();
-      const status = statusOf(s);
-      // Kept while locked too (the save bar then asks to unlock); a signed-out extension has nowhere to save it.
-      if (status === 'unlocked' || status === 'locked') {
-        const p = await captureChecked(s, { url: req.url, login: req.login, password: req.password, tabId: o.tabId });
-        if (p) await saveSession({ pending: p });
-        else {
-          // Nothing to offer (already stored, never-list…): an earlier capture of this tab and site is superseded.
-          const old = pendingOfPage(s, o);
-          if (old) await dropPending(old);
-        }
+      if (!keepsCaptures(s)) return ok(null); // signed out: nowhere to save it
+      const p = await captureChecked(s, { url: req.url, login: req.login, password: req.password, tabId: o.tabId });
+      if (p) {
+        // Only into the same account, still signed in: a sign-out or account switch meanwhile wins.
+        await updateSession((c) => (keepsCaptures(c) && c.user?.id === s.user?.id ? { pending: p } : null));
+      } else {
+        // Nothing to offer (already stored, never-list…): an earlier capture of this tab and site is superseded.
+        const old = pendingOfPage(s, o);
+        if (old) await dropPending(old);
       }
-      await touch();
       return ok(null);
     }
     case 'getPending': {
@@ -276,12 +305,14 @@ async function route(req: Req, o: Origin): Promise<Res> {
       const s = await requireUnlocked();
       if (o.kind === 'page') {
         // The save bar: what this tab captured; url, login and password in the payload are ignored.
-        const p = pendingOfPage(s, o);
-        if (!p) throw new ExtError(NOTHING_PENDING);
+        const p = await claimPending(s, o, 'new');
         await touch();
-        const id = await saveNewRecord({ url: p.url, login: p.login, password: p.password, title: req.title });
-        await dropPending(p);
-        return ok({ id });
+        try {
+          return ok({ id: await saveNewRecord({ url: p.url, login: p.login, password: p.password, title: req.title }) });
+        } catch (e) {
+          await restorePending(p, s);
+          throw e;
+        }
       }
       if (req.url === undefined || req.password === undefined) throw new ExtError(INVALID_MESSAGE);
       const id = await saveNewRecord({ url: req.url, login: req.login ?? '', password: req.password, title: req.title });
@@ -294,11 +325,14 @@ async function route(req: Req, o: Origin): Promise<Res> {
       if (r.permission === 'view') throw new ExtError(READ_ONLY_MESSAGE);
       if (o.kind === 'page') {
         // The save bar: this tab's capture of this record's login; its password, never the payload's.
-        const p = pendingOfPage(s, o);
-        if (!p || !sameLogin(p.login, r.login)) throw new ExtError(NOTHING_PENDING);
+        const p = await claimPending(s, o, 'update', (c) => sameLogin(c.login, r.login));
         await touch();
-        await updateRecordPassword(r.id, p.password);
-        await dropPending(p);
+        try {
+          await updateRecordPassword(r.id, p.password);
+        } catch (e) {
+          await restorePending(p, s);
+          throw e;
+        }
         return ok(null);
       }
       if (!req.password) throw new ExtError(INVALID_MESSAGE);

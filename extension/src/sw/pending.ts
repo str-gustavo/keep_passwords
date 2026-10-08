@@ -4,19 +4,12 @@
 //   captured it and at most PENDING_TTL_MS. Content scripts get a PendingSummary (no password); saving happens here.
 // - The never-list is not secret: registrable domains in storage.local (trusted contexts only, so pages ask the SW).
 import { NEVER_KEY, PENDING_TTL_MS } from '@/shared/constants';
-import { hostOf, registrableDomain, urlsMatch } from '@/shared/domain';
+import { hostOf, originOf, registrableDomain, urlsMatch } from '@/shared/domain';
 import { ExtError } from '@/shared/errors';
 import type { Pending, PendingSummary } from '@/shared/messages';
 import { updateSession, type SessionData, type VaultRecordLite } from './session';
 
 export interface CaptureInput { url: string; login: string; password: string; tabId?: number }
-
-const HAS_SCHEME = /^[a-z][a-z0-9+.-]*:\/\//i;
-/** The page origin only: a path or query may carry tokens and is never kept. Call after hostOf() accepted the URL. */
-const originOf = (url: string): string => {
-  const raw = url.trim();
-  return new URL(HAS_SCHEME.test(raw) ? raw : `https://${raw}`).origin;
-};
 
 /** Logins compare trimmed and case-insensitively (an e-mail typed with another case is the same account). */
 export const sameLogin = (a: string, b: string): boolean => a.trim().toLocaleLowerCase() === b.trim().toLocaleLowerCase();
@@ -41,12 +34,13 @@ function classify(vault: VaultRecordLite[], url: string, login: string, password
  */
 export function capture(s: SessionData, input: CaptureInput, now = Date.now()): Pending | null {
   const host = hostOf(input.url);
-  if (!host || !input.password) return null;
+  const url = originOf(input.url); // the page origin only: a path or query may carry tokens
+  if (!host || !url || !input.password) return null;
   if (s.serverUrl && hostOf(s.serverUrl) === host) return null;
   const login = input.login.trim();
   const c = classify(s.vault, input.url, login, input.password);
   if (!c) return null;
-  return { url: originOf(input.url), host, login, password: input.password, createdAt: now, ...c, ...(input.tabId !== undefined ? { tabId: input.tabId } : {}) };
+  return { url, host, login, password: input.password, createdAt: now, ...c, ...(input.tabId !== undefined ? { tabId: input.tabId } : {}) };
 }
 
 /** capture(), unless the site is in the never-list. */
@@ -55,7 +49,8 @@ export async function captureChecked(s: SessionData, input: CaptureInput, now = 
   return capture(s, input, now);
 }
 
-const isExpired = (p: Pending, now: number) => now - p.createdAt > PENDING_TTL_MS;
+/** Past its TTL — or "captured in the future" (the clock moved back), which cannot be trusted either. */
+const isExpired = (p: Pending, now: number) => now < p.createdAt || now - p.createdAt > PENDING_TTL_MS;
 
 /** The pending item for a page of the same registrable domain, unless expired; with `tabId`, only if that tab captured it. */
 export function pendingFor(s: SessionData, pageUrl: string, now = Date.now(), tabId?: number): Pending | null {

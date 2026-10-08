@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { registrableDomain, hostOf, urlsMatch } from '@/shared/domain';
+import { registrableDomain, hostOf, originOf, urlsMatch } from '@/shared/domain';
 
 describe('registrableDomain', () => {
   it('collapses subdomains to the registrable domain', () => {
@@ -63,5 +63,20 @@ describe('urlsMatch', () => {
     expect(urlsMatch('', 'https://x.com')).toBe(false);
     expect(urlsMatch('https://x.com', 'file:///x')).toBe(false);
     expect(urlsMatch('https://x.com', 'about:blank')).toBe(false);
+  });
+});
+
+describe('originOf', () => {
+  it('keeps scheme, host and port only; scheme-less input is https', () => {
+    expect(originOf('https://App.Site.com:8443/login?token=abc#x')).toBe('https://app.site.com:8443');
+    expect(originOf(' github.com/login ')).toBe('https://github.com');
+    expect(originOf('http://localhost:3000/entrar')).toBe('http://localhost:3000');
+    expect(originOf('x.com/?next=http://y.com')).toBe('https://x.com');
+  });
+  it('is null for anything hostOf rejects', () => {
+    expect(originOf('')).toBeNull();
+    expect(originOf('file:///etc/passwd')).toBeNull();
+    expect(originOf('javascript:alert(1)')).toBeNull();
+    expect(originOf('not a url')).toBeNull();
   });
 });

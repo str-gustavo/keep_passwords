@@ -67,6 +67,12 @@ describe('capture details', () => {
     expect(pendingFor(base(), 'https://site.com')).toBeNull();
   });
 
+  it('a capture from the future (clock moved back) counts as expired', () => {
+    const p = capture(base(), { url: 'https://site.com', login: 'a', password: 'b' }, 10_000)!;
+    expect(pendingFor(base({ pending: p }), 'https://site.com', 10_000)).toEqual(p);
+    expect(pendingFor(base({ pending: p }), 'https://site.com', 9_999)).toBeNull();
+  });
+
   it('summarize never carries the password and re-checks the vault', () => {
     const p = capture(base(), { url: 'https://github.com/login', login: 'ana', password: 'secret-pw', tabId: 1 })!;
     const locked = summarize(base({ pending: p }), p, true);
