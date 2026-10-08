@@ -1,9 +1,10 @@
 import { eq } from 'drizzle-orm';
-import { ApiError, handle, json } from '@/server/http';
+import { ApiError, handle, json, rateLimit } from '@/server/http';
 import { requireUser } from '@/server/auth/session';
 import { getDb, schema } from '@/server/db';
 import { normalizeEmail } from '@/server/services/auth';
 export const GET = handle(async (req) => {
+  rateLimit(req, { key: 'public-key', limit: 60, windowMs: 60_000 });
   await requireUser(req);
   const email = new URL(req.url).searchParams.get('email') ?? '';
   const db = await getDb();

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
-import { ApiError, handle, json, parseBody } from '@/server/http';
+import { ApiError, clientIp, handle, json, parseBody, rateLimit, resetRateLimitsForTests } from '@/server/http';
 import { hashSecret, verifySecret } from '@/server/auth/password';
 
 describe('http helpers', () => {
@@ -35,5 +35,43 @@ describe('secret hashing', () => {
     expect(await verifySecret('c2VjcmV0', h)).toBe(true);
     expect(await verifySecret('c2VjcmV1', h)).toBe(false);
     expect(await hashSecret('c2VjcmV0')).not.toBe(h);
+  });
+});
+
+describe('rateLimit', () => {
+  const r = (headers: Record<string, string> = {}) => new Request('http://x', { headers });
+  const opts = { key: 'k', limit: 2, windowMs: 1_000 };
+  const blocked = (req: Request, o = opts) => { try { rateLimit(req, o); return false; } catch (e) { expect(e).toMatchObject({ status: 429, code: 'rate_limited' }); return true; } };
+
+  it('reads the client IP from x-forwarded-for, then x-real-ip, else local', () => {
+    expect(clientIp(r({ 'x-forwarded-for': ' 1.1.1.1 , 2.2.2.2', 'x-real-ip': '3.3.3.3' }))).toBe('1.1.1.1');
+    expect(clientIp(r({ 'x-real-ip': '3.3.3.3' }))).toBe('3.3.3.3');
+    expect(clientIp(r())).toBe('local');
+  });
+
+  it('keeps one bucket per key and IP, refilled over the window', () => {
+    resetRateLimitsForTests();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(10_000);
+    try {
+      const a = r({ 'x-real-ip': 'a' });
+      expect([blocked(a), blocked(a), blocked(a)]).toEqual([false, false, true]);
+      expect(blocked(r({ 'x-real-ip': 'b' }))).toBe(false);
+      expect(blocked(a, { ...opts, key: 'other' })).toBe(false);
+      now.mockReturnValue(10_499);
+      expect(blocked(a)).toBe(true);
+      now.mockReturnValue(11_000);
+      expect(blocked(a)).toBe(false);
+    } finally { now.mockRestore(); resetRateLimitsForTests(); }
+  });
+
+  it('prunes idle buckets lazily without changing the outcome', () => {
+    resetRateLimitsForTests();
+    const now = vi.spyOn(Date, 'now').mockReturnValue(0);
+    try {
+      for (let i = 0; i < 100; i++) rateLimit(r({ 'x-real-ip': `10.0.0.${i}` }), opts);
+      now.mockReturnValue(120_000);
+      const a = r({ 'x-real-ip': '10.0.0.1' });
+      expect([blocked(a), blocked(a), blocked(a)]).toEqual([false, false, true]);
+    } finally { now.mockRestore(); resetRateLimitsForTests(); }
   });
 });
