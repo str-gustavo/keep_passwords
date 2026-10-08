@@ -1,7 +1,7 @@
 import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import assert from 'node:assert/strict';
-import { startServer } from './lib/server.mjs';
+import { startServer, stopActiveServer } from './lib/server.mjs';
 import { browser, tid } from './lib/browser.mjs';
 
 const onlyIdx = process.argv.indexOf('--only');
@@ -12,7 +12,7 @@ const files = readdirSync(dir).filter((f) => f.endsWith('.mjs') && (!only || f.i
 if (files.length === 0) { console.error(`no scenarios match${only ? ` "${only}"` : ''}`); process.exit(1); }
 
 let server = null;
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { server?.stop(); process.exit(130); });
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { stopActiveServer(); process.exit(130); });
 let failed = 0;
 try {
   server = await startServer();

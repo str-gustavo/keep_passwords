@@ -5,6 +5,22 @@ import path from 'node:path';
 
 const NEXT = path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next');
 
+let activeChild = null;
+
+function killChild(child) {
+  try {
+    if (process.platform === 'win32') spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]);
+    else process.kill(-child.pid, 'SIGTERM');
+  } catch { try { child.kill(); } catch {} }
+}
+
+export function stopActiveServer() {
+  if (!activeChild) return;
+  const c = activeChild;
+  activeChild = null;
+  killChild(c);
+}
+
 export async function startServer({ port = 3100 } = {}) {
   const baseUrl = `http://localhost:${port}`;
   let inUse = false;
@@ -20,18 +36,13 @@ export async function startServer({ port = 3100 } = {}) {
     env: { ...process.env, DATABASE_URL: '', PGLITE_DIR: dir, SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-123456', NODE_ENV: 'production' },
     stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32',
   });
+  activeChild = child;
   let exited = false;
   let exitInfo = '';
   child.on('exit', (code, signal) => { exited = true; exitInfo = `code ${code}${signal ? `, signal ${signal}` : ''}`; });
   child.stdout.on('data', (d) => process.env.E2E_VERBOSE && process.stdout.write(d));
   child.stderr.on('data', (d) => process.stderr.write(d));
-  const stop = () => {
-    if (exited) return;
-    try {
-      if (process.platform === 'win32') spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]);
-      else process.kill(-child.pid, 'SIGTERM');
-    } catch { try { child.kill(); } catch {} }
-  };
+  const stop = () => { if (!exited && activeChild === child) stopActiveServer(); else if (!exited) killChild(child); };
   const deadline = Date.now() + 60_000;
   let ready = false;
   while (Date.now() < deadline && !exited) {
@@ -43,7 +54,7 @@ export async function startServer({ port = 3100 } = {}) {
     }
     await new Promise((r) => setTimeout(r, 500));
   }
-  if (exited) throw new Error(`next start exited with ${exitInfo} before becoming ready`);
+  if (exited && !ready) throw new Error(`next start exited with ${exitInfo} before becoming ready`);
   if (!ready) { stop(); throw new Error(`server did not become ready on ${baseUrl} within 60s`); }
   return { baseUrl, stop };
 }
