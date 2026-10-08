@@ -239,7 +239,7 @@ async function route(req: Req, o: Origin): Promise<Res> {
     // ---- utilities ----
     case 'generatePassword':
       await touchFromPage(o);
-      return ok(generatePassword(genOptions(req.opts)));
+      return ok<{ password: string }>({ password: generatePassword(genOptions(req.opts)) });
     case 'openPopup': {
       try {
         await chrome.action.openPopup(o.kind === 'page' && o.windowId !== undefined ? { windowId: o.windowId } : undefined);

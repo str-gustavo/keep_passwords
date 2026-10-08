@@ -255,7 +255,8 @@ describe('openPopup / openApp / generatePassword / lock', () => {
   });
   it('generatePassword uses the app generator', async () => {
     const res = await handle({ type: 'generatePassword', opts: { length: 24, upper: true, lower: true, digits: true, symbols: false, excludeAmbiguous: true } }, pageSender('https://x.com'));
-    expect(res.ok && typeof res.data === 'string' && /^[A-Za-z0-9]{24}$/.test(res.data)).toBe(true);
+    const pw = res.ok ? (res.data as { password: string }).password : '';
+    expect(/^[A-Za-z0-9]{24}$/.test(pw)).toBe(true);
   });
   it('lock wipes keys and vault', async () => {
     await unlocked();
