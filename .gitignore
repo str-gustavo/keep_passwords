@@ -9,3 +9,4 @@ e2e/screenshots
 next-env.d.ts
 *.md
 .superpowers/
+.claude/worktrees/
