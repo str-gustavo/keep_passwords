@@ -9,17 +9,17 @@ import { t } from '@/lib/i18n/pt-br';
 import { cn } from '@/lib/ui/cn';
 import { loadVault } from '@/lib/vault/actions';
 import { filterRecords, folderNameOf, type ListFilter } from '@/lib/vault/selectors';
-import { useVault } from '@/lib/vault/store';
+import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
 import { RecordDetail } from './RecordDetail';
 import { RecordForm } from './RecordForm';
 import { RecordList } from './RecordList';
+import { ShareDialog } from './ShareDialog';
 import { TrashHeader } from './TrashHeader';
 
 export type VaultEditing = { mode: 'new' } | { mode: 'edit'; id: string } | null;
 
-// Task 27 (share dialog) and Task 26 (move-to-folder dialog) replace these.
-const openShareDialog = () => {};
+// Task 26 (move-to-folder dialog) replaces this.
 const openMoveDialog = () => {};
 
 export function VaultView({ filter, title }: { filter: ListFilter; title: string }) {
@@ -31,6 +31,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
   const [selectedId, setSelected] = useSelectedRecordId();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<VaultEditing>(null);
+  const [sharing, setSharing] = useState<VaultRecord | null>(null);
 
   const heading = filter.kind === 'folder' ? folderNameOf(folders, filter.folderId) ?? title : title;
   const list = useMemo(() => filterRecords(records, filter, query, userId), [records, filter, query, userId]);
@@ -92,7 +93,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
                 key={selected.id}
                 record={selected}
                 onEdit={() => setEditing({ mode: 'edit', id: selected.id })}
-                onShare={openShareDialog}
+                onShare={() => setSharing(selected)}
                 onMove={openMoveDialog}
                 onDeselect={() => setSelected(null)}
               />
@@ -109,6 +110,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
       {editing?.mode === 'edit' && editingRecord?.data && (
         <RecordForm key={editingRecord.id} mode="edit" record={editingRecord} onClose={() => setEditing(null)} />
       )}
+      {sharing && <ShareDialog key={sharing.id} open record={sharing} onClose={() => setSharing(null)} />}
     </div>
   );
 }
