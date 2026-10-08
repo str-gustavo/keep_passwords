@@ -12,5 +12,5 @@ export function exportCsv(rows: ExportRow[]): string {
 }
 
 export function exportJson(rows: ExportRow[]): string {
-  return JSON.stringify({ app: 'keep-passwords', version: 1, exportedAt: new Date().toISOString(), records: rows.map((r) => ({ folder: r.folderName, ...r.data, attachments: r.data.attachments.map((a) => ({ name: a.name, size: a.size })) })) }, null, 2);
+  return JSON.stringify({ app: 'nexus-passwords', version: 1, exportedAt: new Date().toISOString(), records: rows.map((r) => ({ folder: r.folderName, ...r.data, attachments: r.data.attachments.map((a) => ({ name: a.name, size: a.size })) })) }, null, 2);
 }

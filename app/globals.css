@@ -3,23 +3,39 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  --color-primary: #F97316;
-  --color-primary-hover: #EA580C;
+  /* Nexus Logtec palette: orange #FA681F on navy #0D2A4D. Every text/background pair is checked
+     (WCAG AA, >= 4.5:1) by tests/unit/ui/contrast.test.ts; ratios below are WCAG 2.x. */
+  --color-primary: #FA681F;
+  --color-primary-hover: #E55A12;
+  /* Pressed primary buttons switch to white text (5.2:1 on #C2410C). */
   --color-primary-active: #C2410C;
-  --color-primary-soft: #FFEDD5;
-  /* Text on solid orange (AA: 6.2:1 on #F97316, 4.9:1 on hover #EA580C). */
-  --color-fg-on-primary: #1C1917;
-  /* Orange text on light surfaces (AA: 5.2:1 on #FFFFFF, 4.5:1 on primary-soft). */
-  --color-primary-text: #C2410C;
-  --color-sidebar: #1C1917;
-  --color-sidebar-fg: #FAFAF9;
+  --color-primary-soft: #FFE4D3;
+  /* Navy text on solid orange: 5.6:1 on #FA681F, 4.6:1 on hover #E55A12. Darkened from the brand
+     navy #0D2A4D, which only reaches 4.0:1 on the hover orange. */
+  --color-fg-on-primary: #071E3A;
+  /* Orange text on light surfaces: 5.7:1 on #FFFFFF, 4.7:1 on primary-soft. Darkened from #B9480F,
+     which only reaches 4.3:1 on primary-soft (badges, selected options, audit pills). */
+  --color-primary-text: #B0440E;
+  /* The sidebar (and the sign-in backdrop) stay navy in both themes. */
+  --color-sidebar: #0D2A4D;
+  --color-sidebar-fg: #F3F5F7;
+  /* Highlight band on navy: the active sidebar link. */
+  --color-navy: #125375;
+  /* Orange text on navy: 4.8:1 on the #125375 band, 8.3:1 on the sidebar. The solid #FA681F
+     only reaches 2.8:1 on the band, so it is kept for non-text marks there. */
+  --color-sidebar-accent: #FFB38A;
   --color-surface: #FFFFFF;
   --color-surface-2: #FAFAF9;
   --color-border: #E7E5E4;
   --color-fg: #1C1917;
   --color-fg-muted: #78716C;
-  --color-danger: #DC2626;
-  --color-success: #16A34A;
+  /* 6.5:1 on #FFFFFF and white on it. */
+  --color-danger: #B91C1C;
+  /* White on it 5.4:1; 4.7:1 as text on its own 10% tint (the audit pills). Darkened from #15803D,
+     which only reaches 4.4:1 on that tint. */
+  --color-success: #157B3B;
+  /* Text on solid danger/success fills (toasts, the danger button). */
+  --color-fg-on-status: #FFFFFF;
 }
 
 [data-theme="dark"] {
@@ -29,9 +45,14 @@
   --color-fg: #FAFAF9;
   --color-fg-muted: #A8A29E;
   --color-primary-soft: #431407;
-  --color-fg-on-primary: #1C1917;
-  /* Orange text on dark surfaces (AA: 10.4:1 on #1C1917, 9.3:1 on primary-soft). */
-  --color-primary-text: #FDBA74;
+  --color-fg-on-primary: #071E3A;
+  /* Orange text on dark surfaces: 10.0:1 on #1C1917, 9.0:1 on primary-soft. */
+  --color-primary-text: #FFB38A;
+  /* Light red/green read on the dark surfaces (6.3:1 and 10.0:1 on #1C1917); text on their solid
+     fills turns dark, since white only reaches 2.8:1 on #F87171. */
+  --color-danger: #F87171;
+  --color-success: #4ADE80;
+  --color-fg-on-status: #1C1917;
 }
 
 @theme inline {
@@ -43,6 +64,8 @@
   --color-primary-text: var(--color-primary-text);
   --color-sidebar: var(--color-sidebar);
   --color-sidebar-fg: var(--color-sidebar-fg);
+  --color-navy: var(--color-navy);
+  --color-sidebar-accent: var(--color-sidebar-accent);
   --color-surface: var(--color-surface);
   --color-surface-2: var(--color-surface-2);
   --color-border: var(--color-border);
@@ -50,6 +73,7 @@
   --color-fg-muted: var(--color-fg-muted);
   --color-danger: var(--color-danger);
   --color-success: var(--color-success);
+  --color-fg-on-status: var(--color-fg-on-status);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 

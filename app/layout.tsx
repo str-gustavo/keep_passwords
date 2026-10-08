@@ -6,7 +6,14 @@ import { Toaster } from '@/components/ui/Toast';
 
 const inter = Inter({ subsets: ['latin'], variable: '--font-inter' });
 
-export const metadata: Metadata = { title: 'Keep Passwords', description: 'Gerenciador de senhas' };
+export const metadata: Metadata = {
+  title: 'Nexus Passwords',
+  description: 'Gerenciador de senhas da Nexus Logtec com criptografia de ponta a ponta',
+  icons: {
+    icon: [{ url: '/favicon.ico', sizes: 'any' }, { url: '/icons/icon-32.png', type: 'image/png', sizes: '32x32' }],
+    apple: '/apple-touch-icon.png',
+  },
+};
 
 const THEME_SCRIPT = "try{var t=localStorage.getItem('keep-theme');if(!t)t=matchMedia('(prefers-color-scheme: dark)').matches?'dark':'light';document.documentElement.dataset.theme=t}catch(e){}";
 

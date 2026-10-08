@@ -39,7 +39,7 @@ export function Toaster() {
       style={{ inset: 'auto 1rem 1rem auto' }}
       className="pointer-events-none fixed z-50 m-0 flex flex-col gap-2 overflow-visible border-0 bg-transparent p-0"
     >
-      {toasts.map((t) => <div key={t.id} role="status" className={`rounded-lg px-4 py-2 text-sm text-white shadow ${t.kind === 'error' ? 'bg-danger' : 'bg-success'}`}>{t.message}</div>)}
+      {toasts.map((t) => <div key={t.id} role="status" className={`rounded-lg px-4 py-2 text-sm text-fg-on-status shadow ${t.kind === 'error' ? 'bg-danger' : 'bg-success'}`}>{t.message}</div>)}
     </div>
   );
 }

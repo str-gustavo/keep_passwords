@@ -1,5 +1,5 @@
 export const t = {
-  appName: 'Keep Passwords',
+  appName: 'Nexus Passwords',
   email: 'E-mail',
   name: 'Nome',
   masterPassword: 'Senha mestra',
@@ -341,7 +341,7 @@ export const t = {
   shareOwner: 'Proprietário',
   shareRecipientEmail: 'E-mail do destinatário',
   shareEmailPlaceholder: 'nome@exemplo.com',
-  shareRecipientHint: 'O destinatário precisa ter uma conta no Keep Passwords.',
+  shareRecipientHint: 'O destinatário precisa ter uma conta no Nexus Passwords.',
   shareEmailRequired: 'Informe o e-mail do destinatário',
   shareSelf: 'Você já tem acesso a este registro',
   sharePermission: 'Permissão',

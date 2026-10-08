@@ -1,7 +1,7 @@
 'use client';
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { LockKeyhole } from 'lucide-react';
+import { NexusLock } from '@/components/brand/NexusLock';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -43,7 +43,7 @@ export function LockScreen() {
     <div role="dialog" aria-modal="true" aria-labelledby="lock-title" className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-surface-2 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl sm:p-8">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <span className="flex h-12 w-12 items-center justify-center rounded-full bg-primary-soft text-primary"><LockKeyhole className="h-6 w-6" aria-hidden="true" /></span>
+          <NexusLock size={48} />
           <div>
             <h1 id="lock-title" className="text-lg font-semibold text-fg">{t.locked}</h1>
             <p className="mt-1 text-sm text-fg-muted">{t.unlockHint}</p>

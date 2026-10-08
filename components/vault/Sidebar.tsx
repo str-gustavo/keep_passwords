@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { usePathname } from 'next/navigation';
-import { Download, Folder, KeyRound, Settings, Share2, ShieldCheck, Star, Trash2, Upload, Users, Vault, WandSparkles, X } from 'lucide-react';
+import { Download, Folder, Settings, Share2, ShieldCheck, Star, Trash2, Upload, Users, Vault, WandSparkles, X } from 'lucide-react';
+import { NexusLock } from '@/components/brand/NexusLock';
 import { ThemeToggle } from '@/components/theme/ThemeToggle';
 import { t } from '@/lib/i18n/pt-br';
 import { cn } from '@/lib/ui/cn';
@@ -68,7 +69,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         )}
       >
         <div className="flex h-14 shrink-0 items-center gap-2 px-4">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-sidebar"><KeyRound className="h-4 w-4" aria-hidden="true" /></span>
+          <NexusLock size={32} className="shrink-0" />
           <span className="font-semibold tracking-tight">{t.appName}</span>
           <button type="button" aria-label={t.closeMenu} onClick={onClose} className="ml-auto rounded-lg p-1.5 text-sidebar-fg/70 outline-none hover:bg-sidebar-fg/10 hover:text-sidebar-fg focus-visible:ring-2 focus-visible:ring-primary/60 lg:hidden">
             <X className="h-4 w-4" aria-hidden="true" />
@@ -111,7 +112,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
         {user && (
           <div className="shrink-0 space-y-3 border-t border-sidebar-fg/10 bg-sidebar px-4 py-3">
             <div className="flex min-w-0 items-center gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-primary" aria-hidden="true">{initialsOf(user.name, user.email)}</span>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary/20 text-sm font-semibold text-sidebar-accent" aria-hidden="true">{initialsOf(user.name, user.email)}</span>
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{user.name}</p>
                 <p className="truncate text-xs text-sidebar-fg/60" title={user.email}>{user.email}</p>

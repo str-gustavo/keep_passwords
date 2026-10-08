@@ -3,10 +3,10 @@ import { cn } from '@/lib/ui/cn';
 import { Spinner } from './Spinner';
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'sm' | 'md'; loading?: boolean };
 const V = {
-  primary: 'bg-primary text-fg-on-primary hover:bg-primary-hover active:bg-primary-active',
+  primary: 'bg-primary text-fg-on-primary hover:bg-primary-hover active:bg-primary-active active:text-white',
   secondary: 'bg-surface border border-border text-fg hover:bg-surface-2',
   ghost: 'text-fg hover:bg-primary-soft',
-  danger: 'bg-danger text-white hover:opacity-90',
+  danger: 'bg-danger text-fg-on-status hover:opacity-90',
 };
 /** Defaults to `type="button"`: only buttons that explicitly say `type="submit"` submit a surrounding form. */
 export function Button({ variant = 'primary', size = 'md', loading, className, children, disabled, type = 'button', ...p }: Props) {

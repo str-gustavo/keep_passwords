@@ -22,7 +22,7 @@ function download(kind: ExportKind, content: string) {
   const url = URL.createObjectURL(new Blob([content], { type: MIME[kind] }));
   const a = document.createElement('a');
   a.href = url;
-  a.download = `keep-passwords-${today()}.${kind}`;
+  a.download = `nexus-passwords-${today()}.${kind}`;
   a.rel = 'noopener';
   a.style.display = 'none';
   document.body.appendChild(a);

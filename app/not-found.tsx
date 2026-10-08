@@ -10,7 +10,7 @@ export default function NotFound() {
       action={(
         <Link
           href="/cofre" data-testid="not-found-home"
-          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-fg-on-primary outline-none transition hover:bg-primary-hover focus-visible:ring-2 focus-visible:ring-primary/40"
+          className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-fg-on-primary outline-none transition hover:bg-primary-hover active:bg-primary-active active:text-white focus-visible:ring-2 focus-visible:ring-primary/40"
         >
           {t.goToVault}
         </Link>

@@ -126,7 +126,7 @@ export default async function run(ctx) {
   b.waitTextIn(tid('toast'), 'Exportação concluída');
   assert.ok(b.evalJs(NO_ERROR_TOAST), 'no error toast after the export');
   const exported = lastDownload(b);
-  assert.match(exported.name, /^keep-passwords-\d{4}-\d{2}-\d{2}\.csv$/);
+  assert.match(exported.name, /^nexus-passwords-\d{4}-\d{2}-\d{2}\.csv$/);
   for (const title of ['Documentos', ...rows.map((r) => r.name)]) assert.ok(exported.text.includes(title), `export contains ${title}`);
   for (const r of rows) assert.ok(exported.text.includes(r.password), `export contains the password of ${r.name}`);
   b.screenshot('40-export');

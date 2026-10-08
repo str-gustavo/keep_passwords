@@ -1,6 +1,6 @@
 export function AuthCard({ title, description, children, footer }: { title: string; description?: string; children: React.ReactNode; footer?: React.ReactNode }) {
   return (
-    <section className="w-full rounded-2xl border border-border bg-surface p-6 shadow-sm sm:p-8">
+    <section className="w-full rounded-2xl border border-border bg-surface p-6 text-fg shadow-xl sm:p-8">
       <h1 className="text-xl font-semibold text-fg">{title}</h1>
       {description && <p className="mt-1 text-sm text-fg-muted">{description}</p>}
       <div className="mt-6">{children}</div>

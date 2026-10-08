@@ -16,7 +16,8 @@ export function SidebarLink({ href, icon: Icon, label, active, testId, depth = 0
         className={cn(
           'flex items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/60',
           trailing ? 'pr-10' : null,
-          active ? 'bg-primary/20 font-medium text-primary' : 'text-sidebar-fg/80 hover:bg-sidebar-fg/10 hover:text-sidebar-fg',
+          // Orange on the navy band: sidebar-accent, since solid primary text there is below AA (see globals.css).
+          active ? 'bg-navy font-medium text-sidebar-accent' : 'text-sidebar-fg/80 hover:bg-sidebar-fg/10 hover:text-sidebar-fg',
         )}
       >
         <Icon className="h-4 w-4 shrink-0" aria-hidden="true" />
