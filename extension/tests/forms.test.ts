@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { detectForms, findOtpField, isVisible } from '@/shared/forms';
+import { currentPasswordField, detectForms, findOtpField, isVisible, newPasswordFields } from '@/shared/forms';
 
 const html = (s: string) => { document.body.innerHTML = s; };
 const byId = <T extends HTMLElement = HTMLInputElement>(id: string) => document.getElementById(id) as T;
@@ -28,6 +28,47 @@ describe('detectForms', () => {
   it('ignores hidden password fields and works without <form>', () => {
     html(`<div><input type="text" id="u"><input type="password" id="p"><input type="password" hidden></div>`);
     const [f] = detectForms(document); expect(f?.form).toBeNull(); expect(f?.passwordFields.map((p) => p.id)).toEqual(['p']); expect(f?.usernameField?.id).toBe('u');
+  });
+
+  it('change: 3+ password fields, or current-password + new-password tokens', () => {
+    html(`<form><input type="text" id="u"><input type="password" id="c"><input type="password" id="n1"><input type="password" id="n2"></form>`);
+    let [f] = detectForms(document);
+    expect(f?.kind).toBe('change');
+    expect(currentPasswordField(f!)?.id).toBe('c');
+    expect(newPasswordFields(f!).map((p) => p.id)).toEqual(['n1', 'n2']);
+
+    html(`<form><input type="password" id="n" autocomplete="new-password"><input type="password" id="c" autocomplete="current-password"></form>`);
+    [f] = detectForms(document);
+    expect(f?.kind).toBe('change');
+    expect(currentPasswordField(f!)?.id).toBe('c');
+    expect(newPasswordFields(f!).map((p) => p.id)).toEqual(['n']);
+  });
+
+  it('a new-password token without current-password stays signup', () => {
+    html(`<form><input type="password" id="a" autocomplete="new-password"><input type="password" id="b"></form>`);
+    expect(detectForms(document)[0]?.kind).toBe('signup');
+  });
+
+  it('currentPasswordField / newPasswordFields per kind', () => {
+    html(`<form><input type="password" id="p"></form>`);
+    let [f] = detectForms(document);
+    expect(f?.kind).toBe('login');
+    expect(currentPasswordField(f!)?.id).toBe('p'); expect(newPasswordFields(f!)).toEqual([]);
+
+    html(`<form><input type="password" id="a"><input type="password" id="b"></form>`);
+    [f] = detectForms(document);
+    expect(f?.kind).toBe('signup');
+    expect(currentPasswordField(f!)).toBeNull(); expect(newPasswordFields(f!).map((p) => p.id)).toEqual(['a', 'b']);
+
+    html(`<form><input type="password" id="a" autocomplete="new-password"><input type="password" id="b" autocomplete="new-password"></form>`);
+    [f] = detectForms(document);
+    expect(f?.kind).toBe('signup');
+    expect(currentPasswordField(f!)).toBeNull(); expect(newPasswordFields(f!).map((p) => p.id)).toEqual(['a', 'b']);
+
+    html(`<form><input type="password" id="a"><input type="password" id="b" autocomplete="current-password"><input type="password" id="c"></form>`);
+    [f] = detectForms(document);
+    expect(f?.kind).toBe('change');
+    expect(currentPasswordField(f!)?.id).toBe('b'); expect(newPasswordFields(f!).map((p) => p.id)).toEqual(['a', 'c']);
   });
 
   it('two separate login forms yield two detections', () => {
@@ -138,6 +179,13 @@ describe('findOtpField', () => {
     expect(findOtpField(document)).toBeNull();
   });
 
+  it('skips postal, zip, promo and coupon fields', () => {
+    html(`<input name="zip_code">`); expect(findOtpField(document)).toBeNull();
+    html(`<input name="cep_codigo"><input id="promoCode"><input placeholder="Coupon code"><input name="voucher_code"><input id="codigo-cupom"><input name="codigo_desconto"><input placeholder="Postal code">`);
+    expect(findOtpField(document)).toBeNull();
+    html(`<input name="zip_code"><input name="otp" id="real">`); expect(findOtpField(document)?.id).toBe('real');
+  });
+
   it('ignores non-text input types', () => {
     html(`<input type="checkbox" name="trust_2fa"><input type="submit" id="code">`);
     expect(findOtpField(document)).toBeNull();
@@ -184,6 +232,19 @@ describe('isVisible', () => {
     const root = byId<HTMLDivElement>('host').attachShadow({ mode: 'open' });
     root.innerHTML = `<input id="s">`;
     expect(isVisible(root.getElementById('s') as HTMLInputElement)).toBe(false);
+  });
+
+  it('uses checkVisibility({ visibilityProperty: true }) when the engine has it', () => {
+    html(`<input id="a"><div style="display:none"><input id="b"></div><div aria-hidden="true"><input id="c"></div>`);
+    const calls: unknown[] = [];
+    const stub = (result: boolean) => (opts?: CheckVisibilityOptions) => { calls.push(opts); return result; };
+    byId('a').checkVisibility = stub(false);
+    expect(isVisible(byId('a'))).toBe(false);
+    expect(calls).toEqual([{ visibilityProperty: true }]);
+    byId('b').checkVisibility = stub(true); // trusted over the computed-style walk
+    expect(isVisible(byId('b'))).toBe(true);
+    byId('c').checkVisibility = stub(true); // aria-hidden is still honoured
+    expect(isVisible(byId('c'))).toBe(false);
   });
 
   it('zero-size client rects mean invisible; non-zero rects mean visible', () => {

@@ -4,7 +4,8 @@
  * (MutationObserver) and is testable in jsdom, which has no layout.
  */
 
-export type FormKind = 'login' | 'signup';
+/** `change`: a password-change form (current password + new one); `signup`: only new password(s). */
+export type FormKind = 'login' | 'signup' | 'change';
 
 export interface DetectedForm {
   kind: FormKind;
@@ -23,6 +24,8 @@ const OTP_TYPES = new Set(['text', 'tel', 'number']);
 const USERNAME_HINT = /user|login|email|e-mail|cpf|cnpj|account|conta|usu[aá]rio/i;
 /** Whole-word match, applied to hints whose `_`, `-`, `.` and camelCase boundaries became spaces. */
 const OTP_HINT = /\b(otp|totp|2fa|mfa|code|codigo|código|token|verification)\b/i;
+/** "Code" fields that are not one-time codes (postal / discount codes). */
+const NOT_OTP_HINT = /postal|zip|promo|coupon|voucher|cep|cupom|desconto/i;
 
 const isInput = (el: Element): el is HTMLInputElement => el.localName === 'input';
 
@@ -40,16 +43,23 @@ function parentOf(el: Element): Element | null {
 }
 
 /**
- * Whether the user can see `el`. jsdom has no layout, so an element counts as visible unless it or
- * an ancestor is `hidden`, `aria-hidden="true"` or `display:none`, it is `visibility:hidden`
- * (computed visibility is inherited, so this covers hidden ancestors too), it is `type=hidden`, or
- * — when the engine reports client rects — all of its boxes have zero size.
+ * Whether the user can see `el`. It is not when it is `type=hidden`, when it or an ancestor is
+ * `hidden` or `aria-hidden="true"`, or when the engine says it is not rendered: real engines answer
+ * through `checkVisibility({ visibilityProperty: true })` (display:none ancestors across shadow
+ * boundaries, content-visibility, visibility:hidden). jsdom has no layout nor `checkVisibility`, so
+ * there a computed-style walk stands in: `display:none` on the element or an ancestor, or
+ * `visibility:hidden` on the element (computed visibility is inherited, so this covers hidden
+ * ancestors too). Finally, when the engine reports client rects, all of them having zero size
+ * means invisible.
  */
 export function isVisible(el: HTMLElement): boolean {
   if (isInput(el) && el.type === 'hidden') return false;
+  const native = typeof el.checkVisibility === 'function' ? el.checkVisibility({ visibilityProperty: true }) : undefined;
+  if (native === false) return false;
   const view = el.ownerDocument?.defaultView ?? null;
   for (let node: Element | null = el; node; node = parentOf(node)) {
     if (node.hasAttribute('hidden') || node.getAttribute('aria-hidden') === 'true') return false;
+    if (native !== undefined) continue; // the engine already vouched for styles and layout
     const computed = view?.getComputedStyle(node);
     const style = computed ?? (node as Partial<HTMLElement>).style;
     if (style?.display === 'none') return false;
@@ -95,10 +105,21 @@ function findUsernameField(root: Document | ShadowRoot, form: HTMLFormElement | 
   return best;
 }
 
+const hasToken = (fields: HTMLInputElement[], token: string) => fields.some((p) => autocompleteTokens(p).includes(token));
+
+/**
+ * `change` with 3+ password fields, or with both a `current-password` and a `new-password` field;
+ * otherwise `signup` with 2+ fields or a `new-password` field; otherwise `login`.
+ */
+function classify(passwordFields: HTMLInputElement[]): FormKind {
+  if (passwordFields.length >= 3 || (hasToken(passwordFields, 'current-password') && hasToken(passwordFields, 'new-password'))) return 'change';
+  if (passwordFields.length >= 2 || hasToken(passwordFields, 'new-password')) return 'signup';
+  return 'login';
+}
+
 /**
  * One detection per form holding visible password fields, plus one for the root's form-less
- * password fields, ordered by their first password field. A group is a sign-up / password-change
- * form when it has 2+ password fields or any of them asks for `autocomplete=new-password`.
+ * password fields, ordered by their first password field.
  */
 export function detectForms(root: Document | ShadowRoot): DetectedForm[] {
   const groups = new Map<HTMLFormElement | null, HTMLInputElement[]>();
@@ -110,7 +131,7 @@ export function detectForms(root: Document | ShadowRoot): DetectedForm[] {
   if (groups.size === 0) return [];
   const otpField = findOtpField(root);
   return Array.from(groups, ([form, passwordFields]) => ({
-    kind: passwordFields.length >= 2 || passwordFields.some((p) => autocompleteTokens(p).includes('new-password')) ? 'signup' : 'login',
+    kind: classify(passwordFields),
     form,
     passwordFields,
     usernameField: findUsernameField(root, form, passwordFields[0]!),
@@ -118,20 +139,48 @@ export function detectForms(root: Document | ShadowRoot): DetectedForm[] {
   }));
 }
 
-function otpHint(el: Element): string {
-  return hints(el, ['name', 'id', 'placeholder'])
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .replace(/[_\-.]+/g, ' ');
+/**
+ * The field for the account's existing password: the `current-password` field, else the first
+ * password field of a `login` / `change` form; a `signup` form has none.
+ */
+export function currentPasswordField(f: DetectedForm): HTMLInputElement | null {
+  const tagged = f.passwordFields.find((p) => autocompleteTokens(p).includes('current-password'));
+  if (tagged) return tagged;
+  return f.kind === 'signup' ? null : f.passwordFields[0] ?? null;
+}
+
+/**
+ * The fields that take a new password: the `new-password` fields; without that hint, every field of
+ * a `signup` form and every field but the current one (the first, unless tagged) of a `change` form.
+ * A `login` form has none.
+ */
+export function newPasswordFields(f: DetectedForm): HTMLInputElement[] {
+  const tagged = f.passwordFields.filter((p) => autocompleteTokens(p).includes('new-password'));
+  if (tagged.length > 0) return tagged;
+  if (f.kind === 'signup') return [...f.passwordFields];
+  if (f.kind === 'change') {
+    const current = currentPasswordField(f);
+    return f.passwordFields.filter((p) => p !== current);
+  }
+  return [];
+}
+
+/** Whether name/id/placeholder name a one-time code (and not a postal / discount code). */
+function hasOtpHint(el: Element): boolean {
+  const raw = hints(el, ['name', 'id', 'placeholder']);
+  if (NOT_OTP_HINT.test(raw)) return false;
+  return OTP_HINT.test(raw.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_\-.]+/g, ' '));
 }
 
 /**
  * The page's one-time-code field: the first visible text/tel/number input with
  * `autocomplete=one-time-code`, else the first whose name/id/placeholder has an OTP word
- * (otp, totp, 2fa, mfa, code, código, token, verification). Never a password field.
+ * (otp, totp, 2fa, mfa, code, código, token, verification) and no postal/zip/promo/coupon/voucher/
+ * cep/cupom/desconto word. Never a password field.
  */
 export function findOtpField(root: Document | ShadowRoot): HTMLInputElement | null {
   const candidates = visibleInputs(root, (type) => OTP_TYPES.has(type));
   return candidates.find((el) => autocompleteTokens(el).includes('one-time-code'))
-    ?? candidates.find((el) => OTP_HINT.test(otpHint(el)))
+    ?? candidates.find(hasOtpHint)
     ?? null;
 }

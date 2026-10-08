@@ -48,6 +48,35 @@ describe('fill', () => {
     expect(byId('u').value).toBe('ana@x.com'); expect(byId('p').value).toBe('pw');
   });
 
+  it('setNativeValue on a detached element does not throw', () => {
+    const el = document.createElement('input');
+    expect(() => setNativeValue(el, 'x')).not.toThrow();
+    expect(el.value).toBe('x');
+  });
+
+  it('fillCredentials on a change form fills the username and only the current password', () => {
+    document.body.innerHTML = `<form><input type="text" id="u"><input type="password" id="c"><input type="password" id="n1"><input type="password" id="n2"></form>`;
+    const [f] = detectForms(document); expect(f?.kind).toBe('change');
+    fillCredentials(f!, 'ana', 'old');
+    expect(byId('u').value).toBe('ana'); expect(byId('c').value).toBe('old');
+    expect(byId('n1').value).toBe(''); expect(byId('n2').value).toBe('');
+
+    document.body.innerHTML = `<form><input type="password" id="n" autocomplete="new-password"><input type="password" id="c" autocomplete="current-password"></form>`;
+    const [g] = detectForms(document); expect(g?.kind).toBe('change');
+    fillCredentials(g!, 'ana', 'old');
+    expect(byId('c').value).toBe('old'); expect(byId('n').value).toBe('');
+  });
+
+  it('fillCredentials skips disabled and read-only password fields', () => {
+    document.body.innerHTML = `<form><input type="email" id="u"><input type="password" id="p1" disabled><input type="password" id="p2"></form>`;
+    let [f] = detectForms(document); expect(f?.kind).toBe('signup'); fillCredentials(f!, 'ana', 'S3nh@');
+    expect(byId('p1').value).toBe(''); expect(byId('p2').value).toBe('S3nh@'); expect(byId('u').value).toBe('ana');
+
+    document.body.innerHTML = `<form><input type="email" id="u"><input type="password" id="p" readonly></form>`;
+    [f] = detectForms(document); expect(f?.kind).toBe('login'); fillCredentials(f!, 'ana', 'S3nh@');
+    expect(byId('p').value).toBe(''); expect(byId('u').value).toBe('ana');
+  });
+
   it('fillOtp writes the code through the native setter', () => {
     document.body.innerHTML = `<input id="otp" autocomplete="one-time-code">`; const el = byId('otp');
     const events: string[] = []; for (const t of ['input', 'change', 'keyup']) el.addEventListener(t, () => events.push(t));

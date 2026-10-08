@@ -1,4 +1,4 @@
-import type { DetectedForm } from './forms';
+import { currentPasswordField, type DetectedForm } from './forms';
 
 /**
  * Sets `input.value` the way a user would, so React/Angular/Vue notice: frameworks such as React
@@ -7,7 +7,7 @@ import type { DetectedForm } from './forms';
  * and `keyup` are dispatched. Focuses the field first; never submits.
  */
 export function setNativeValue(input: HTMLInputElement, value: string): void {
-  input.focus();
+  input.focus({ preventScroll: true });
   const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
   if (setter) setter.call(input, value);
   else input.value = value;
@@ -23,9 +23,16 @@ const fillable = (el: HTMLInputElement) => !el.disabled && !el.readOnly;
 
 /**
  * Fills the username field (when the form has one, the login is non-empty and the field is
- * editable) and then every password field of the form — a sign-up form's confirmation included.
+ * editable), then the password: on a `change` form only the current-password field — the
+ * new-password fields are never touched — otherwise every password field (a sign-up form's
+ * confirmation included). Disabled and read-only fields are skipped.
  */
 export function fillCredentials(f: DetectedForm, login: string, password: string): void {
   if (f.usernameField && login && fillable(f.usernameField)) setNativeValue(f.usernameField, login);
+  if (f.kind === 'change') {
+    const current = currentPasswordField(f);
+    if (current && fillable(current)) setNativeValue(current, password);
+    return;
+  }
   for (const field of f.passwordFields) if (fillable(field)) setNativeValue(field, password);
 }
