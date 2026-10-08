@@ -13,6 +13,7 @@ import { useVault } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
 import { RecordDetail } from './RecordDetail';
 import { RecordList } from './RecordList';
+import { TrashHeader } from './TrashHeader';
 
 export type VaultEditing = { mode: 'new' } | { mode: 'edit'; id: string } | null;
 
@@ -56,6 +57,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
           </Button>
         )}
       </header>
+      {filter.kind === 'trash' && <TrashHeader records={inScope} />}
 
       {status === 'error' && (
         <div role="alert" className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-2 text-sm text-danger lg:px-6">
