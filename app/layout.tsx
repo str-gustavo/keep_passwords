@@ -19,7 +19,8 @@ const THEME_SCRIPT = "try{var t=localStorage.getItem('keep-theme');if(!t)t=match
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" suppressHydrationWarning>
+    // data-nexus-app: the Nexus Passwords extension never injects its fill icon into the app itself.
+    <html lang="pt-BR" data-nexus-app="1" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
