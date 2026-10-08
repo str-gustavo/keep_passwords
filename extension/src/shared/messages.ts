@@ -1,0 +1,38 @@
+// Typed messages between the extension contexts (popup, content scripts) and the service worker.
+// Every request goes through chrome.runtime.sendMessage and is answered with a `Res`. No response ever carries the
+// master password, a key or another record's password; `fillRequest`/`fillFromPopup` hand over one record's login and
+// password only after the service worker checked that the record belongs to the sender's page.
+
+export type ExtStatus = 'needs-server' | 'signed-out' | 'locked' | 'unlocked';
+export interface ExtState { status: ExtStatus; serverUrl: string | null; email: string | null; lockMinutes: number; recordCount: number }
+export interface MatchItem { id: string; title: string; login: string; url: string; hasTotp: boolean }
+export interface GenOptions { length: number; upper: boolean; lower: boolean; digits: boolean; symbols: boolean; excludeAmbiguous: boolean }
+export type Req =
+  | { type: 'getState' } | { type: 'setServer'; url: string } | { type: 'signIn'; email: string; password: string }
+  | { type: 'unlock'; password: string } | { type: 'lock' } | { type: 'signOut' } | { type: 'refresh' } | { type: 'openApp' }
+  | { type: 'matchesForUrl'; url: string } | { type: 'search'; query: string }
+  | { type: 'fillRequest'; id: string } | { type: 'totpFor'; id: string }
+  | { type: 'savePending'; url: string; login: string; password: string } | { type: 'getPending' } | { type: 'discardPending' } | { type: 'neverForSite'; host: string }
+  | { type: 'saveNew'; url: string; login: string; password: string; title: string } | { type: 'updatePassword'; id: string; password: string }
+  | { type: 'generatePassword'; opts: GenOptions }
+  | { type: 'openPopup' }
+  | { type: 'fillFromPopup'; id: string; tabId: number };
+export type Res<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
+export interface Pending { url: string; host: string; login: string; password: string; createdAt: number; existingId: string | null; kind: 'new' | 'update' }
+
+/** `fillRequest` answer: the one record the user picked, for the page it was checked against. */
+export interface Credentials { login: string; password: string }
+/** `totpFor` answer. */
+export interface TotpCode { code: string; remaining: number; period: number }
+/** `openPopup` answer: false when Chrome refused (no user gesture, unsupported); the UI then explains the toolbar icon. */
+export interface OpenPopupResult { opened: boolean }
+/** Service worker → content script (top frame of the validated tab) after `fillFromPopup`. */
+export interface FillIntoMsg { type: 'fillInto'; login: string; password: string }
+
+/** chrome.runtime.sendMessage wrapper: resolves with `data`, throws an Error carrying the pt-BR message on `{ ok: false }`. */
+export async function send<T>(req: Req): Promise<T> {
+  const res = (await chrome.runtime.sendMessage(req)) as Res<T> | undefined;
+  if (!res || typeof res !== 'object') throw new Error('O Nexus Passwords não respondeu. Tente novamente.');
+  if (!res.ok) throw new Error(res.error);
+  return res.data;
+}
