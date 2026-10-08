@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { useFreshDb } from '../helpers/db';
 import { call, req, registerUser } from '../helpers/client';
 import { POST as create } from '@/app/api/records/route';
-import { PUT as update } from '@/app/api/records/[id]/route';
+import { PUT as update, DELETE as trash } from '@/app/api/records/[id]/route';
 import { GET as listShares, POST as addShare } from '@/app/api/records/[id]/shares/route';
 import { PUT as updateShare, DELETE as removeShare } from '@/app/api/records/[id]/shares/[userId]/route';
 import { GET as vault } from '@/app/api/vault/route';
@@ -59,8 +59,18 @@ async function setup() {
   const created = await call(create, req('POST', '/api/records', { cookie: a.cookie, body: { type: 'login', encData, encKey: await wrapAesKey(a.material.dataKey, key) } }));
   const id = created.data.record.id as string;
   const rsaKey = await rsaWrapAesKey(await importPublicKey(b.material.publicKey), key);
-  return { a, b, id, rsaKey };
+  const c = await registerUser('c@b.c');
+  const cKey = await rsaWrapAesKey(await importPublicKey(c.material.publicKey), key);
+  return { a, b, c, id, rsaKey, cKey, key };
 }
+
+type U = Awaited<ReturnType<typeof registerUser>>;
+const share = (id: string, by: U, to: U, encKey: string, permission: 'view' | 'edit', canShare: boolean) =>
+  call(addShare, req('POST', `/api/records/${id}/shares`, { cookie: by.cookie, body: { userId: to.userId, encKey, permission, canShare } }), { id });
+const upd = (id: string, by: U, target: string, permission: 'view' | 'edit', canShare: boolean) =>
+  call(updateShare, req('PUT', `/api/records/${id}/shares/${target}`, { cookie: by.cookie, body: { permission, canShare } }), { id, userId: target });
+const rem = (id: string, by: U, target: string) =>
+  call(removeShare, req('DELETE', `/api/records/${id}/shares/${target}`, { cookie: by.cookie }), { id, userId: target });
 
 describe('shares extras', () => {
   it('direct-view sharee without canShare gets 403 on GET /shares', async () => {
@@ -75,8 +85,53 @@ describe('shares extras', () => {
     expect(JSON.stringify(r.data)).toContain('user_not_found');
   });
   it('stranger gets 404 on GET /shares', async () => {
-    const { id } = await setup();
-    const c = await registerUser('c@b.c');
+    const { id, c } = await setup();
     expect((await call(listShares, req('GET', `/api/records/${id}/shares`, { cookie: c.cookie }), { id })).status).toBe(404);
+  });
+});
+
+describe('shares hardening', () => {
+  it('view+canShare delegate cannot escalate', async () => {
+    const { a, b, c, id, rsaKey, cKey } = await setup();
+    expect((await share(id, a, b, rsaKey, 'view', true)).status).toBe(201);
+    expect((await upd(id, b, b.userId, 'edit', true)).status).toBe(403);
+    expect((await share(id, b, c, cKey, 'edit', false)).status).toBe(403);
+    expect((await share(id, b, c, cKey, 'view', false)).status).toBe(201);
+  });
+  it('view+canShare delegate cannot remove an edit share but can remove self', async () => {
+    const { a, b, c, id, rsaKey, cKey } = await setup();
+    await share(id, a, b, rsaKey, 'view', true);
+    await share(id, a, c, cKey, 'edit', false);
+    expect((await rem(id, b, c.userId)).status).toBe(403);
+    expect((await upd(id, b, c.userId, 'view', false)).status).toBe(403);
+    expect((await rem(id, b, b.userId)).status).toBe(200);
+  });
+  it('updateShare: 404 unknown target, 400 owner target', async () => {
+    const { a, id } = await setup();
+    const u = await registerUser('z@b.c');
+    expect((await upd(id, a, u.userId, 'view', false)).status).toBe(404);
+    expect((await upd(id, a, a.userId, 'view', false)).status).toBe(400);
+  });
+  it('delegate cannot re-share a trashed record', async () => {
+    const { a, b, c, id, rsaKey, cKey } = await setup();
+    await share(id, a, b, rsaKey, 'edit', true);
+    expect((await call(trash, req('DELETE', `/api/records/${id}`, { cookie: a.cookie }), { id })).status).toBe(200);
+    expect((await share(id, b, c, cKey, 'view', false)).status).toBe(404);
+  });
+  it('rejects malformed encKey', async () => {
+    const { a, b, id } = await setup();
+    const bad = await share(id, a, b, '!!!not-base64!!!', 'view', false);
+    expect(bad.status).toBe(400);
+    expect(JSON.stringify(bad.data)).toContain('not_a_blob');
+    const short = await share(id, a, b, Buffer.alloc(32, 1).toString('base64'), 'view', false);
+    expect(short.status).toBe(400);
+  });
+  it('removeShare: stranger 404, non-canShare sharee 403', async () => {
+    const { a, b, c, id, rsaKey, cKey } = await setup();
+    await share(id, a, b, rsaKey, 'view', false);
+    await share(id, a, c, cKey, 'view', false);
+    const s = await registerUser('s@b.c');
+    expect((await rem(id, s, b.userId)).status).toBe(404);
+    expect((await rem(id, b, c.userId)).status).toBe(403);
   });
 });

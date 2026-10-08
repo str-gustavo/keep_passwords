@@ -1,8 +1,21 @@
 import { and, eq, ne } from 'drizzle-orm';
 import { ApiError } from '@/server/http';
-import { getDb, schema } from '@/server/db';
+import { getDb, schema, type Db } from '@/server/db';
 import type { Permission, ShareDto } from '@/lib/api/types';
-import { resolveAccess } from './access';
+import { RANK, resolveAccess, type RecordAccess } from './access';
+
+const noEscalation = () => new ApiError(403, 'forbidden', 'Você não pode conceder mais acesso do que possui');
+
+function assertCanGrant(a: RecordAccess, callerId: string, permission: 'view' | 'edit') {
+  if (a.record.ownerId === callerId) return;
+  if (!a.permission || RANK[permission] > RANK[a.permission]) throw noEscalation();
+}
+
+async function assertCanManageTarget(db: Db, a: RecordAccess, recordId: string, targetId: string) {
+  const row = await db.query.recordKeys.findFirst({ where: and(eq(schema.recordKeys.recordId, recordId), eq(schema.recordKeys.userId, targetId)) });
+  if (!row) throw new ApiError(404, 'not_found', 'Compartilhamento não encontrado');
+  if (!a.permission || RANK[row.permission as 'view' | 'edit'] > RANK[a.permission]) throw noEscalation();
+}
 
 async function requireShareRight(userId: string, recordId: string) {
   const db = await getDb();
@@ -22,6 +35,7 @@ export async function listShares(userId: string, recordId: string): Promise<Shar
 export async function addShare(userId: string, recordId: string, i: { userId: string; encKey: string; permission: 'view' | 'edit'; canShare: boolean }) {
   const { db, a } = await requireShareRight(userId, recordId);
   if (i.userId === a.record.ownerId) throw new ApiError(400, 'invalid_target', 'O dono já tem acesso');
+  assertCanGrant(a, userId, i.permission);
   const target = await db.query.users.findFirst({ where: eq(schema.users.id, i.userId) });
   if (!target) throw new ApiError(404, 'user_not_found', 'Nenhuma conta com este e-mail');
   const existing = await db.query.recordKeys.findFirst({ where: and(eq(schema.recordKeys.recordId, recordId), eq(schema.recordKeys.userId, i.userId)) });
@@ -33,6 +47,11 @@ export async function addShare(userId: string, recordId: string, i: { userId: st
 export async function updateShare(userId: string, recordId: string, targetId: string, i: { permission: 'view' | 'edit'; canShare: boolean }) {
   const { db, a } = await requireShareRight(userId, recordId);
   if (targetId === a.record.ownerId) throw new ApiError(400, 'invalid_target', 'Não é possível alterar o dono');
+  if (a.record.ownerId !== userId) {
+    if (targetId === userId) throw new ApiError(403, 'forbidden', 'Você não pode alterar o seu próprio acesso');
+    await assertCanManageTarget(db, a, recordId, targetId);
+    assertCanGrant(a, userId, i.permission);
+  }
   const res = await db.update(schema.recordKeys).set({ permission: i.permission, canShare: i.canShare }).where(and(eq(schema.recordKeys.recordId, recordId), eq(schema.recordKeys.userId, targetId))).returning();
   if (res.length === 0) throw new ApiError(404, 'not_found', 'Compartilhamento não encontrado');
 }
@@ -43,6 +62,7 @@ export async function removeShare(userId: string, recordId: string, targetId: st
   if (!a.permission) throw new ApiError(404, 'not_found', 'Registro não encontrado');
   if (targetId === a.record.ownerId) throw new ApiError(400, 'invalid_target', 'Não é possível remover o dono');
   if (targetId !== userId && !a.canShare) throw new ApiError(403, 'forbidden', 'Você não pode alterar compartilhamentos');
+  if (targetId !== userId && a.record.ownerId !== userId) await assertCanManageTarget(db, a, recordId, targetId);
   const res = await db.delete(schema.recordKeys).where(and(eq(schema.recordKeys.recordId, recordId), eq(schema.recordKeys.userId, targetId))).returning();
   if (res.length === 0) throw new ApiError(404, 'not_found', 'Compartilhamento não encontrado');
 }

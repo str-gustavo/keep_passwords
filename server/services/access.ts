@@ -6,7 +6,7 @@ import type { FolderRole, Permission } from '@/lib/api/types';
 export type RecordKeyRow = typeof schema.recordKeys.$inferSelect;
 export interface RecordAccess { record: schema.RecordRow; permission: Permission | null; canShare: boolean; direct: RecordKeyRow | null; folderRoles: { folderId: string; role: FolderRole }[] }
 
-const RANK: Record<Permission, number> = { view: 1, edit: 2, owner: 3 };
+export const RANK: Record<Permission, number> = { view: 1, edit: 2, owner: 3 };
 export const roleToPermission = (role: FolderRole): Permission => (role === 'viewer' ? 'view' : 'edit');
 export const maxPermission = (a: Permission | null, b: Permission | null): Permission | null =>
   !a ? b : !b ? a : RANK[a] >= RANK[b] ? a : b;
