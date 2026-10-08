@@ -98,6 +98,16 @@ describe('auth flows — hardening', () => {
     expect(useVault.getState().keys).toBeNull();
   });
 
+  it('signIn refuses absurd KDF iteration counts above the server ceiling (5_000_000)', async () => {
+    vi.mocked(api.post).mockImplementation(async (path) => {
+      if (path === '/api/auth/prelogin') return { kdfSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', kdfIterations: 5_000_001 };
+      throw new Error('unexpected ' + path);
+    });
+    await expect(signIn('a@b.c', 'pw 123456')).rejects.toThrow('Parâmetros de segurança inválidos do servidor');
+    expect(vi.mocked(api.post).mock.calls.map((c) => c[0])).toEqual(['/api/auth/prelogin']);
+    expect(useVault.getState().keys).toBeNull();
+  });
+
   it('signIn refuses weak KDF parameters in the login user object', async () => {
     const m = await createAccountMaterial('a@b.c', 'pw 123456');
     vi.mocked(api.post).mockImplementation(async (path) => {
@@ -155,37 +165,6 @@ describe('auth flows — hardening', () => {
     expect(vi.mocked(api.post).mock.calls).toEqual([['/api/auth/recovery/start', { email: 'a@b.c' }]]);
   });
 
-  it('clearStaleSession logs out once on 401 and sign-in waits for it before posting the login', async () => {
-    const { ApiClientError } = await import('@/lib/api/client');
-    const MockedApiError = ApiClientError as unknown as new (message: string) => Error;
-    vi.mocked(api.get).mockImplementation(() => new Promise((_, reject) => setTimeout(() => reject(Object.assign(new MockedApiError('Sessão expirada'), { status: 401 })), 1_000)));
-    vi.mocked(api.post).mockImplementation(async (path) => {
-      if (path === '/api/auth/prelogin') return { kdfSalt: 'AAAAAAAAAAAAAAAAAAAAAA==', kdfIterations: 600_000 };
-      if (path === '/api/auth/logout') return { ok: true };
-      if (path === '/api/auth/login') throw new MockedApiError('E-mail ou senha incorretos');
-      throw new Error('unexpected ' + path);
-    });
-    const { clearStaleSession } = await import('@/lib/auth/flows');
-    const cleanup = clearStaleSession();
-    await expect(signIn('a@b.c', 'pw 123456')).rejects.toThrow('E-mail ou senha incorretos');
-    await cleanup;
-    expect(vi.mocked(api.post).mock.calls.map((c) => c[0])).toEqual(['/api/auth/prelogin', '/api/auth/logout', '/api/auth/login']);
-  });
-
-  it('clearStaleSession leaves valid sessions and non-401 failures alone', async () => {
-    const { ApiClientError } = await import('@/lib/api/client');
-    const MockedApiError = ApiClientError as unknown as new (message: string) => Error;
-    const { clearStaleSession } = await import('@/lib/auth/flows');
-    vi.mocked(api.get).mockResolvedValueOnce({ user: { id: 'u1' } });
-    await clearStaleSession();
-    vi.mocked(api.get).mockRejectedValueOnce(Object.assign(new MockedApiError('Sem conexão'), { status: 0 }));
-    await clearStaleSession();
-    vi.mocked(api.get).mockRejectedValueOnce(Object.assign(new MockedApiError('Sessão expirada'), { status: 401 }));
-    vi.mocked(api.post).mockRejectedValueOnce(new Error('offline'));
-    await expect(clearStaleSession()).resolves.toBeUndefined();
-    expect(vi.mocked(api.post).mock.calls).toEqual([['/api/auth/logout']]);
-  });
-
   it('safeNextPath only allows same-origin paths', async () => {
     const { safeNextPath } = await import('@/lib/auth/flows');
     expect(safeNextPath(null)).toBe('/cofre');
@@ -196,6 +175,12 @@ describe('auth flows — hardening', () => {
     expect(safeNextPath('/\\evil.example')).toBe('/cofre');
     expect(safeNextPath('/\t/evil.example')).toBe('/cofre');
     expect(safeNextPath('javascript:alert(1)')).toBe('/cofre');
+    // Dot segments that normalize to a protocol-relative path.
+    expect(safeNextPath('/..//evil.example')).toBe('/cofre');
+    expect(safeNextPath('/.//evil.example')).toBe('/cofre');
+    expect(safeNextPath('/%2e%2e//evil.example')).toBe('/cofre');
+    expect(safeNextPath('/cofre/..//evil.example')).toBe('/cofre');
+    expect(safeNextPath('/cofre/gerador#topo')).toBe('/cofre/gerador#topo');
   });
 
   it('authErrorMessage maps errors to safe pt-BR messages', async () => {

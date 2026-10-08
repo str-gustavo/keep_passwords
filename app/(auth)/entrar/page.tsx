@@ -1,13 +1,13 @@
 'use client';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Suspense, useEffect, useRef, useState } from 'react';
+import { Suspense, useState } from 'react';
 import { AuthCard, AuthError } from '@/components/auth/AuthCard';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
-import { authErrorMessage, clearStaleSession, safeNextPath, signIn } from '@/lib/auth/flows';
+import { authErrorMessage, safeNextPath, signIn } from '@/lib/auth/flows';
 import { t } from '@/lib/i18n/pt-br';
 
 function SignInForm() {
@@ -18,13 +18,6 @@ function SignInForm() {
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const staleChecked = useRef(false);
-
-  useEffect(() => {
-    if (staleChecked.current) return;
-    staleChecked.current = true;
-    void clearStaleSession();
-  }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();

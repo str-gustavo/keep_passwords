@@ -6,26 +6,12 @@ import { t } from '@/lib/i18n/pt-br';
 import { loadVault } from '@/lib/vault/actions';
 import { useVault } from '@/lib/vault/store';
 
-/** Anti-downgrade: never derive or use keys with fewer PBKDF2 iterations than this client's floor. */
+/** Same ceiling as the server's zod schema; above it a hostile server could freeze the tab. */
+const KDF_MAX_ITERATIONS = 5_000_000;
+
+/** Anti-downgrade: never derive or use keys with fewer PBKDF2 iterations than this client's floor (nor absurdly many). */
 function assertKdfParams(iterations: unknown): void {
-  if (typeof iterations !== 'number' || !Number.isInteger(iterations) || iterations < KDF_ITERATIONS) throw new Error(t.unsafeServerParams);
-}
-
-// A stale-cookie cleanup may still be in flight when the user submits; requests that set the
-// session cookie wait for it so its logout response can never clear the new cookie.
-let staleSessionCleanup: Promise<void> = Promise.resolve();
-
-/** The middleware only checks cookie presence: if the cookie no longer maps to a valid session, clear it. */
-export function clearStaleSession(): Promise<void> {
-  staleSessionCleanup = (async () => {
-    try { await api.get('/api/auth/me'); }
-    catch (e) {
-      if (e instanceof ApiClientError && e.status === 401) {
-        try { await api.post('/api/auth/logout'); } catch { /* best effort */ }
-      }
-    }
-  })();
-  return staleSessionCleanup;
+  if (typeof iterations !== 'number' || !Number.isInteger(iterations) || iterations < KDF_ITERATIONS || iterations > KDF_MAX_ITERATIONS) throw new Error(t.unsafeServerParams);
 }
 
 async function unlockSession(user: SessionUser, dataKey: CryptoKey) {
@@ -37,7 +23,6 @@ async function unlockSession(user: SessionUser, dataKey: CryptoKey) {
 
 export async function signUp(email: string, name: string, password: string): Promise<{ phrase: string }> {
   const m = await createAccountMaterial(email, password);
-  await staleSessionCleanup;
   // Built field by field: the password, the recovery phrase and the raw keys never leave the device.
   const { user } = await api.post<LoginResponse>('/api/auth/register', {
     email, name, authKey: m.authKey, kdfSalt: m.kdfSalt, kdfIterations: m.kdfIterations, encDataKey: m.encDataKey, publicKey: m.publicKey, encPrivateKey: m.encPrivateKey,
@@ -53,7 +38,6 @@ export async function signIn(email: string, password: string): Promise<void> {
   const pre = await api.post<PreloginResponse>('/api/auth/prelogin', { email });
   assertKdfParams(pre.kdfIterations);
   const authKey = await computeAuthKey(email, password, pre.kdfSalt, pre.kdfIterations);
-  await staleSessionCleanup;
   const { user } = await api.post<LoginResponse>('/api/auth/login', { email, authKey });
   assertKdfParams(user.kdfIterations);
   const dataKey = await unlockDataKey(user.email, password, user.kdfSalt, user.kdfIterations, user.encDataKey);
@@ -69,7 +53,6 @@ export async function recoverComplete(email: string, phrase: string, newPassword
   const dataKey = await recoverDataKey(phrase, recoverySalt, v.encDataKeyRecovery);
   const n = await rewrapForNewPassword(email, newPassword, dataKey);
   const rec = await createRecoveryMaterial(dataKey);
-  await staleSessionCleanup;
   const { user } = await api.post<LoginResponse>('/api/auth/recovery/complete', {
     token: v.token, newAuthKey: n.authKey, kdfSalt: n.kdfSalt, kdfIterations: n.kdfIterations, encDataKey: n.encDataKey,
     recoveryAuthKey: rec.recoveryAuthKey, recoverySalt: rec.recoverySalt, encDataKeyRecovery: rec.encDataKeyRecovery,
@@ -80,9 +63,16 @@ export async function recoverComplete(email: string, phrase: string, newPassword
   return { phrase: rec.phrase };
 }
 
-/** Only same-origin absolute paths; anything else (other origins, protocol-relative, backslashes, whitespace) falls back. */
+/**
+ * Only same-origin absolute paths; anything else (other origins, protocol-relative, backslashes, whitespace,
+ * dot segments that normalize to `//host`) falls back. Returns the normalized path.
+ */
 export function safeNextPath(next: string | null | undefined, fallback = '/cofre'): string {
-  return next && /^\/(?![/\\])[^\s\\]*$/.test(next) ? next : fallback;
+  if (!next || !/^\/(?![/\\])[^\s\\]*$/.test(next)) return fallback;
+  let u: URL;
+  try { u = new URL(next, 'http://n'); } catch { return fallback; }
+  if (u.origin !== 'http://n' || u.pathname.startsWith('//')) return fallback;
+  return u.pathname + u.search + u.hash;
 }
 
 /** Maps a flow error to a pt-BR message safe to show; unknown errors never leak internals. */
