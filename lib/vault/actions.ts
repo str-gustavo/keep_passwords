@@ -4,6 +4,7 @@ import { computeAuthKey, createRecoveryMaterial, rewrapForNewPassword, unlockDat
 import { decryptBytes, encryptBytes, encryptJson, encryptString, generateAesKey, wrapAesKey } from '@/lib/crypto/aes';
 import { importPublicKey, rsaWrapAesKey } from '@/lib/crypto/rsa';
 import { touchPasswordDates, type AttachmentMeta, type RecordData } from '@/lib/record-types/record-data';
+import { clearClipboardIfOwned } from './clipboard';
 import { decryptVault } from './decrypt';
 import { useVault, type VaultFolder, type VaultRecord } from './store';
 
@@ -70,6 +71,7 @@ export async function createSharedFolder(name: string): Promise<VaultFolder> {
 }
 export async function renameFolder(id: string, name: string) {
   const keys = requireKeys(); const f = requireFolder(id);
+  if (f.kind === 'shared' && !f.key) throw new Error('Chave da pasta indisponível');
   await api.put(`/api/folders/${id}`, { encName: await encryptString(f.kind === 'shared' ? f.key! : keys.dataKey, name) });
   s().upsertFolder({ ...f, name });
 }
@@ -83,7 +85,10 @@ export async function shareRecord(id: string, email: string, permission: 'view' 
 }
 export const listShares = async (id: string) => (await api.get<{ shares: ShareDto[] }>(`/api/records/${id}/shares`)).shares;
 export const updateShare = (id: string, userId: string, permission: 'view' | 'edit', canShare: boolean) => api.put(`/api/records/${id}/shares/${userId}`, { permission, canShare });
-export async function removeShare(id: string, userId: string) { await api.delete(`/api/records/${id}/shares/${userId}`); if (userId === s().user?.id) s().removeRecord(id); }
+export async function removeShare(id: string, userId: string) { await api.delete(`/api/records/${id}/shares/${userId}`); if (userId !== s().user?.id) return;
+  const r = s().records.find((x) => x.id === id);
+  if (!r) return;
+  if (r.sharedFolderIds.length === 0) s().removeRecord(id); else s().upsertRecord({ ...r, hasDirectKey: false }); }
 
 export async function addFolderMember(folderId: string, email: string, role: 'admin' | 'editor' | 'viewer') {
   const f = requireFolder(folderId); if (!f.key) throw new Error('Chave da pasta indisponível');
@@ -135,4 +140,4 @@ export async function changeMasterPassword(current: string, next: string): Promi
   return rec.phrase;
 }
 export async function updateSettings(p: { name?: string; lockMinutes?: number }) { const { user } = await api.put<LoginResponse>('/api/account/settings', p); s().setUser(user); }
-export async function logout() { try { await api.post('/api/auth/logout'); } finally { s().reset(); } }
+export async function logout() { try { await clearClipboardIfOwned(); await api.post('/api/auth/logout'); } finally { s().reset(); } }

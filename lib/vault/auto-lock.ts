@@ -1,16 +1,17 @@
 'use client';
 import { useEffect } from 'react';
 import { useVault } from './store';
+import { clearClipboardIfOwned } from './clipboard';
 export function useAutoLock(): void {
   const minutes = useVault((s) => s.user?.lockMinutes ?? 10);
-  const status = useVault((s) => s.status);
+  const unlocked = useVault((s) => s.keys !== null);
   useEffect(() => {
-    if (status !== 'ready') return;
+    if (!unlocked) return;
     let timer: ReturnType<typeof setTimeout>;
-    const arm = () => { clearTimeout(timer); timer = setTimeout(() => useVault.getState().lock(), minutes * 60_000); };
+    const arm = () => { clearTimeout(timer); timer = setTimeout(() => { void clearClipboardIfOwned(); useVault.getState().lock(); }, minutes * 60_000); };
     const events = ['mousemove', 'keydown', 'click', 'touchstart', 'scroll'] as const;
-    events.forEach((e) => window.addEventListener(e, arm, { passive: true }));
+    events.forEach((e) => window.addEventListener(e, arm, { capture: true, passive: true }));
     arm();
-    return () => { clearTimeout(timer); events.forEach((e) => window.removeEventListener(e, arm)); };
-  }, [minutes, status]);
+    return () => { clearTimeout(timer); events.forEach((e) => window.removeEventListener(e, arm, { capture: true })); };
+  }, [minutes, unlocked]);
 }
