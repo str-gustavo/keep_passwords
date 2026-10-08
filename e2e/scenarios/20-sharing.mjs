@@ -1,12 +1,13 @@
-import { closeDialog, createLogin, idFromTestId, signUp, unlock } from '../lib/flows.mjs';
+import { closeDialog, createLogin, idFromTestId, refreshVault, signUp, unlock } from '../lib/flows.mjs';
 
 const NO_ERROR_TOAST = `!document.querySelector('[data-testid="toast"] .bg-danger')`;
 
 // Sharing one record between two accounts (two isolated browser sessions): view-only, upgrade to edit, the
 // recipient's edit reaching the owner, "can share" and the recipient leaving the share.
 //
-// The vault is loaded once per unlock (no polling), so each side reloads to see the other's changes; a reload locks
-// the vault (keys live in memory only) and the scenario unlocks it again.
+// Each side sees the other's changes after its vault is loaded again: either in place with the "Atualizar" button
+// (`vault-refresh`, the vault stays unlocked) or with a reload, which locks the vault (keys live in memory only) and
+// the scenario unlocks it again. Both paths are used below.
 export default async function run(ctx) {
   const { baseUrl, browser, tid, assert } = ctx;
   const a = browser('a');
@@ -45,9 +46,9 @@ export default async function run(ctx) {
   a.screenshot('20-share-dialog');
   closeDialog(a);
 
-  // 3. B finds it under "Compartilhados comigo": read-only, no edit or share button.
-  b.reload();
-  unlock(b, master);
+  // 3. B refreshes its vault in place and finds it under "Compartilhados comigo": read-only, no edit or share button.
+  refreshVault(b);
+  b.waitFor(tid(`record-row-${recordId}`));
   b.click(tid('nav-shared'));
   b.waitUrl('/cofre/compartilhados');
   b.waitFor(tid(`record-row-${recordId}`));
@@ -86,11 +87,12 @@ export default async function run(ctx) {
   b.waitUntil(detailIs('Netflix Família'), 15000, 'the new title in B');
   b.screenshot('20-recipient-edit');
 
-  // 6. A reloads and sees B's edit.
-  a.reload();
-  unlock(a, master);
+  // 6. A refreshes in place and sees B's edit; the record stays selected.
+  a.waitUntil(detailIs('Netflix'), 15000, 'Netflix still selected in A');
+  refreshVault(a);
   a.waitUntil(detailIs('Netflix Família'), 15000, "B's edit in A");
   a.waitTextIn(tid(`record-row-${recordId}`), 'Netflix Família');
+  assert.equal(new URL(a.url()).searchParams.get('r'), recordId);
 
   // 7. A lets B share it too; with that, B can open the share dialog and leave the share from its own row.
   a.click(tid('detail-share'));

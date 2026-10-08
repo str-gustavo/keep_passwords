@@ -48,6 +48,14 @@ export function unlock(b, password) {
   b.waitHidden(tid('lock-password'), 30000);
 }
 
+// Re-downloads the vault in place with the header's "Atualizar" button (no reload, the vault stays unlocked) and waits
+// for the refresh to end. Callers then wait for the content they expect.
+export function refreshVault(b) {
+  b.waitFor(tid('vault-refresh'));
+  b.click(tid('vault-refresh'));
+  b.waitUntil(`document.querySelector('[data-testid="vault-refresh"]')?.getAttribute('aria-busy') !== 'true'`, 15000, 'the vault refresh to finish');
+}
+
 // Closes the one open dialog with its X ("Fechar") button: `press Escape` does not close native <dialog>s in
 // agent-browser.
 export function closeDialog(b) {

@@ -1,4 +1,4 @@
-import { closeDialog, createLogin, idFromTestId, signUp, unlock } from '../lib/flows.mjs';
+import { closeDialog, createLogin, idFromTestId, refreshVault, signUp, unlock } from '../lib/flows.mjs';
 
 const FOLDER_URL = /\/cofre\/pasta\/[^/?#]+$/;
 const folderIdOf = (url) => new URL(url).pathname.split('/').pop();
@@ -199,9 +199,9 @@ export default async function run(ctx) {
   a.waitFor(tid(`record-row-${wikiId}`));
   assert.equal(a.count('[data-testid^="record-row-"]'), 1);
 
-  // B no longer has the record once its vault is loaded again; "Wiki" is still shared through the folder.
-  b.reload();
-  unlock(b, master);
+  // B no longer has the record once it refreshes its vault in place; "Wiki" is still shared through the folder.
+  refreshVault(b);
+  b.waitHidden(tid(`record-row-${recordId}`));
   b.waitUntil(headingIs('Equipe'), 15000, 'the shared folder in B after the unlink');
   b.waitFor(tid(`record-row-${wikiId}`));
   assert.equal(b.count('[data-testid^="record-row-"]'), 1);

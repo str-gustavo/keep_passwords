@@ -29,8 +29,42 @@ export async function unlockWithPassword(password: string): Promise<void> {
 export async function loadVault(): Promise<void> {
   const keys = requireKeys();
   s().setStatus('loading');
+  lastVaultLoad = Date.now();
   try { s().setVault(await decryptVault(await api.get<VaultResponse>('/api/vault'), keys)); }
   catch (e) { s().setStatus('error', e instanceof Error ? e.message : 'Erro ao carregar o cofre'); throw e; }
+}
+
+/** Minimum time between two automatic refreshes (focus / tab visible); the "Atualizar" button bypasses it. */
+export const REFRESH_MIN_INTERVAL_MS = 30_000;
+let lastVaultLoad = 0;
+let refreshInFlight: Promise<void> | null = null;
+
+/**
+ * Re-downloads and decrypts the vault while it stays unlocked, so other accounts' changes show up without a reload.
+ * Unlike `loadVault` the status stays 'ready' (the UI keeps the list, the selection and any open form); `refreshing`
+ * is set meanwhile. Automatic calls run at most once per REFRESH_MIN_INTERVAL_MS (an unlock counts as a run);
+ * `force` skips that. Concurrent calls share one request. The snapshot is dropped if the vault was locked or changed
+ * locally while it was downloading, since it may predate that change.
+ */
+export function refreshVault({ force = false }: { force?: boolean } = {}): Promise<void> {
+  if (refreshInFlight) return refreshInFlight;
+  const keys = s().keys;
+  if (!keys || s().status === 'loading') return Promise.resolve();
+  if (!force && Date.now() - lastVaultLoad < REFRESH_MIN_INTERVAL_MS) return Promise.resolve();
+  lastVaultLoad = Date.now();
+  const rev = s().rev;
+  s().setRefreshing(true);
+  const run = (async () => {
+    try {
+      const next = await decryptVault(await api.get<VaultResponse>('/api/vault'), keys);
+      if (s().keys === keys && s().rev === rev) s().setVault(next);
+    } finally {
+      s().setRefreshing(false);
+      refreshInFlight = null;
+    }
+  })();
+  refreshInFlight = run;
+  return run;
 }
 
 export async function createRecord(data: RecordData, folderId: string | null = null): Promise<VaultRecord> {

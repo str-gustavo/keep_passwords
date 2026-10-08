@@ -6,6 +6,7 @@ import { api } from '@/lib/api/client';
 import { useVault } from '@/lib/vault/store';
 import { bootstrapSession } from '@/lib/vault/actions';
 import { useAutoLock } from '@/lib/vault/auto-lock';
+import { useVaultRefresh } from '@/lib/vault/use-vault-refresh';
 import { t } from '@/lib/i18n/pt-br';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
@@ -24,6 +25,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const [navOpen, setNavOpen] = useState(false);
   const closeNav = useCallback(() => setNavOpen(false), []);
   useAutoLock();
+  useVaultRefresh();
 
   useEffect(() => {
     if (user) { setBooted(true); return; }

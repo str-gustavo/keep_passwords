@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { t } from '@/lib/i18n/pt-br';
 import { cn } from '@/lib/ui/cn';
-import { loadVault } from '@/lib/vault/actions';
+import { toast } from '@/components/ui/Toast';
+import { loadVault, refreshVault } from '@/lib/vault/actions';
 import { filterRecords, type ListFilter } from '@/lib/vault/selectors';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
@@ -28,6 +29,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
   const userId = useVault((s) => s.user?.id ?? '');
   const status = useVault((s) => s.status);
   const loadError = useVault((s) => s.error);
+  const refreshing = useVault((s) => s.refreshing);
   const [selectedId, setSelected] = useSelectedRecordId();
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<VaultEditing>(null);
@@ -67,6 +69,13 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
           <Input id="vault-search" data-testid="search" type="search" autoComplete="off" placeholder={t.search} value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
         </div>
+        <Button
+          variant="secondary" data-testid="vault-refresh" aria-label={refreshing ? t.vaultRefreshing : t.vaultRefresh} title={t.vaultRefresh}
+          aria-busy={refreshing} disabled={status === 'loading'}
+          onClick={() => { refreshVault({ force: true }).catch(() => toast.error(t.vaultRefreshFailed)); }}
+        >
+          <RotateCw className={cn('h-4 w-4', refreshing && 'animate-spin')} aria-hidden="true" />
+        </Button>
         {canCreate && (
           <Button data-testid="new-record" onClick={() => setEditing({ mode: 'new' })} aria-label={t.newRecord}>
             <Plus className="h-4 w-4" aria-hidden="true" />
