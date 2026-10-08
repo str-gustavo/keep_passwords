@@ -25,7 +25,7 @@ const USERNAME_HINT = /user|login|email|e-mail|cpf|cnpj|account|conta|usu[aá]ri
 /** Whole-word match, applied to hints whose `_`, `-`, `.` and camelCase boundaries became spaces. */
 const OTP_HINT = /\b(otp|totp|2fa|mfa|code|codigo|código|token|verification)\b/i;
 /** "Code" fields that are not one-time codes (postal / discount codes). */
-const NOT_OTP_HINT = /postal|zip|promo|coupon|voucher|cep|cupom|desconto/i;
+const NOT_OTP_HINT = /postal|zip|promo|coupon|voucher|cupom|desconto|\bcep\b/i;
 
 const isInput = (el: Element): el is HTMLInputElement => el.localName === 'input';
 
@@ -168,8 +168,9 @@ export function newPasswordFields(f: DetectedForm): HTMLInputElement[] {
 /** Whether name/id/placeholder name a one-time code (and not a postal / discount code). */
 function hasOtpHint(el: Element): boolean {
   const raw = hints(el, ['name', 'id', 'placeholder']);
-  if (NOT_OTP_HINT.test(raw)) return false;
-  return OTP_HINT.test(raw.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_\-.]+/g, ' '));
+  const normalized = raw.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_\-.]+/g, ' ');
+  if (NOT_OTP_HINT.test(normalized)) return false;
+  return OTP_HINT.test(normalized);
 }
 
 /**

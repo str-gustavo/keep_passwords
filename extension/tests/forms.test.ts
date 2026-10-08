@@ -186,6 +186,12 @@ describe('findOtpField', () => {
     html(`<input name="zip_code"><input name="otp" id="real">`); expect(findOtpField(document)?.id).toBe('real');
   });
 
+  it('does not treat "accept"/"reception" as the cep exclusion', () => {
+    html(`<input name="accept_code" id="a">`); expect(findOtpField(document)?.id).toBe('a');
+    html(`<input name="receptionCode" id="r">`); expect(findOtpField(document)?.id).toBe('r');
+    html(`<input name="cep" id="c">`); expect(findOtpField(document)).toBeNull();
+  });
+
   it('ignores non-text input types', () => {
     html(`<input type="checkbox" name="trust_2fa"><input type="submit" id="code">`);
     expect(findOtpField(document)).toBeNull();
