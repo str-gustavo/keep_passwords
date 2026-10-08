@@ -40,12 +40,14 @@ export default async function run(ctx) {
   b.click(tid('detail-edit'));
   b.waitFor(tid('record-save'));
   b.upload(tid('attachment-input'), filePath);
-  // Toasts last 4 s (and sit behind the modal, still in the DOM): the upload toast is part of the same wait as the
-  // uploaded row, so no other step runs between the upload finishing and the toast check.
+  // Toasts last 4 s: the upload toast is part of the same wait as the uploaded row, so no other step runs between the
+  // upload finishing and the toast check. The toaster is a top-layer popover, shown above the open record dialog.
   b.waitUntil(
     `!!document.querySelector('[data-testid^="form-attachment-delete-"]')
-      && document.querySelector('[data-testid="toast"]').innerText.includes(${JSON.stringify(`Anexo enviado: ${fileName}`)})`,
-    30000, 'the uploaded attachment in the form and its toast',
+      && document.querySelector('[data-testid="toast"]').innerText.includes(${JSON.stringify(`Anexo enviado: ${fileName}`)})
+      && document.querySelector('[data-testid="toast"]').matches(':popover-open')
+      && !!document.querySelector('dialog[open]')`,
+    30000, 'the uploaded attachment in the form and its toast above the dialog',
   );
   const attachmentId = b.evalJs(`document.querySelector('[data-testid^="form-attachment-delete-"]').dataset.testid.replace('form-attachment-delete-', '')`);
   assert.ok(attachmentId);
