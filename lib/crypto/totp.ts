@@ -12,6 +12,8 @@ export function base32Decode(s: string): Uint8Array<ArrayBuffer> {
   return new Uint8Array(out);
 }
 
+const ALGORITHMS: Record<string, TotpParams['algorithm']> = { SHA1: 'SHA-1', SHA256: 'SHA-256', SHA512: 'SHA-512' };
+
 export function parseOtpauth(uri: string): TotpParams {
   let url: URL;
   try { url = new URL(uri); } catch { throw new Error('otpauth inválido'); }
@@ -20,12 +22,17 @@ export function parseOtpauth(uri: string): TotpParams {
   if (!secret) throw new Error('otpauth inválido');
   const label = decodeURIComponent(url.pathname.replace(/^\/+/, ''));
   const [maybeIssuer, maybeAccount] = label.includes(':') ? label.split(':', 2) : [undefined, label];
-  const alg = (url.searchParams.get('algorithm') ?? 'SHA1').toUpperCase().replace('SHA', 'SHA-');
+  // `SHA256`, `sha-256` and `SHA-256` are all accepted; unknown names fall back to the RFC default SHA-1.
+  const alg = ALGORITHMS[(url.searchParams.get('algorithm') ?? 'SHA1').toUpperCase().replace(/-/g, '')] ?? 'SHA-1';
+  const digits = Number(url.searchParams.get('digits') ?? 6);
+  const period = Number(url.searchParams.get('period') ?? 30);
+  if (!Number.isInteger(digits) || digits < 6 || digits > 10) throw new Error('otpauth inválido');
+  if (!Number.isInteger(period) || period < 15 || period > 120) throw new Error('otpauth inválido');
   return {
     secret: secret.replace(/\s+/g, '').toUpperCase(),
-    digits: Number(url.searchParams.get('digits') ?? 6),
-    period: Number(url.searchParams.get('period') ?? 30),
-    algorithm: (['SHA-1', 'SHA-256', 'SHA-512'].includes(alg) ? alg : 'SHA-1') as TotpParams['algorithm'],
+    digits,
+    period,
+    algorithm: alg,
     issuer: url.searchParams.get('issuer') ?? maybeIssuer,
     account: maybeAccount || undefined,
   };

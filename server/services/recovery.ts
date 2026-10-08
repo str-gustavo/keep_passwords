@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, lt } from 'drizzle-orm';
 import { ApiError } from '@/server/http';
 import { getDb, schema } from '@/server/db';
 import { verifySecret } from '@/server/auth/password';
@@ -18,6 +18,8 @@ export async function verifyRecovery(email: string, recoveryAuthKey: string) {
   if (!u || !(await verifySecret(recoveryAuthKey, u.recoveryAuthHash))) throw new ApiError(401, 'invalid_recovery', 'Frase de recuperação incorreta');
   const token = randomBytes(32).toString('base64url');
   await db.delete(schema.recoveryTokens).where(eq(schema.recoveryTokens.userId, u.id));
+  // Housekeeping: expired tokens of any account are useless (completeRecovery checks expiresAt).
+  await db.delete(schema.recoveryTokens).where(lt(schema.recoveryTokens.expiresAt, new Date()));
   await db.insert(schema.recoveryTokens).values({ token, userId: u.id, expiresAt: new Date(Date.now() + 10 * 60_000) });
   return { token, encDataKeyRecovery: u.encDataKeyRecovery };
 }

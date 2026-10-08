@@ -70,6 +70,21 @@ describe('recovery', () => {
     expect(c.data.error.code).toBe('invalid_token');
   });
 
+  it('verify also deletes expired tokens of other accounts, keeping valid ones', async () => {
+    const a = await registerUser('a@b.c');
+    const b = await registerUser('b@b.c');
+    const c = await registerUser('c@b.c');
+    const db = await getDb();
+    await db.insert(schema.recoveryTokens).values([
+      { token: 'expired-b', userId: b.userId, expiresAt: new Date(Date.now() - 1000) },
+      { token: 'valid-c', userId: c.userId, expiresAt: new Date(Date.now() + 60_000) },
+    ]);
+    const v = await verified('a@b.c', a);
+    expect(v.status).toBe(200);
+    const tokens = (await db.select({ token: schema.recoveryTokens.token }).from(schema.recoveryTokens)).map((r) => r.token).sort();
+    expect(tokens).toEqual([v.data.token, 'valid-c'].sort());
+  });
+
   it('a second verify replaces the first token', async () => {
     const s = await registerUser('a@b.c');
     const v1 = await verified('a@b.c', s);

@@ -19,6 +19,19 @@ describe('totp', () => {
     const p = parseOtpauth('otpauth://totp/x?secret=ABC&digits=8&period=60&algorithm=SHA256');
     expect(p).toMatchObject({ secret: 'ABC', digits: 8, period: 60, algorithm: 'SHA-256' });
   });
+  it('normalises the algorithm with or without a hyphen, in any case', () => {
+    const alg = (a: string) => parseOtpauth(`otpauth://totp/x?secret=ABC&algorithm=${a}`).algorithm;
+    expect([alg('SHA-256'), alg('sha256'), alg('SHA512'), alg('Sha-512'), alg('SHA-1'), alg('sha1')]).toEqual(['SHA-256', 'SHA-256', 'SHA-512', 'SHA-512', 'SHA-1', 'SHA-1']);
+    expect(alg('MD5')).toBe('SHA-1');
+  });
+  it('accepts 6-10 digits and a 15-120 s period, rejects anything else', () => {
+    const uri = (q: string) => `otpauth://totp/x?secret=ABC&${q}`;
+    expect(parseOtpauth(uri('digits=10&period=15'))).toMatchObject({ digits: 10, period: 15 });
+    expect(parseOtpauth(uri('digits=6&period=120'))).toMatchObject({ digits: 6, period: 120 });
+    for (const q of ['digits=5', 'digits=11', 'digits=7.5', 'digits=x', 'period=14', 'period=121', 'period=0', 'period=abc']) {
+      expect(() => parseOtpauth(uri(q)), q).toThrow('otpauth inválido');
+    }
+  });
   it('rejects invalid uris', () => {
     expect(() => parseOtpauth('https://x')).toThrow('otpauth inválido');
     expect(() => parseOtpauth('otpauth://totp/x')).toThrow('otpauth inválido');

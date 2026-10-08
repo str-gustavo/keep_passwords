@@ -1,6 +1,7 @@
 import { api } from '@/lib/api/client';
 import type { LoginResponse, MemberDto, SessionUser, SharesResponse, VaultResponse } from '@/lib/api/types';
 import { computeAuthKey, createRecoveryMaterial, rewrapForNewPassword, unlockDataKey, unlockPrivateKey } from '@/lib/crypto/account';
+import { assertKdfIterations } from '@/lib/crypto/kdf';
 import { decryptBytes, encryptBytes, encryptJson, encryptString, generateAesKey, wrapAesKey } from '@/lib/crypto/aes';
 import { importPublicKey, rsaWrapAesKey } from '@/lib/crypto/rsa';
 import { touchPasswordDates, type AttachmentMeta, type RecordData } from '@/lib/record-types/record-data';
@@ -13,13 +14,15 @@ const requireKeys = () => { const k = s().keys; if (!k) throw new Error('Cofre b
 const requireRecord = (id: string) => { const r = s().records.find((x) => x.id === id); if (!r || !r.key || !r.data) throw new Error('Registro indisponível'); return r as VaultRecord & { key: CryptoKey; data: RecordData }; };
 const requireFolder = (id: string) => { const f = s().folders.find((x) => x.id === id); if (!f) throw new Error('Pasta não encontrada'); return f; };
 
+/** A session whose KDF parameters are unsafe is treated as no session: keys are never derived with them. */
 export async function bootstrapSession(): Promise<SessionUser | null> {
-  try { const { user } = await api.get<{ user: SessionUser }>('/api/auth/me'); s().setUser(user); return user; }
+  try { const { user } = await api.get<{ user: SessionUser }>('/api/auth/me'); assertKdfIterations(user.kdfIterations); s().setUser(user); return user; }
   catch { s().setUser(null); return null; }
 }
 
 export async function unlockWithPassword(password: string): Promise<void> {
   const user = s().user; if (!user) throw new Error('Sessão ausente');
+  assertKdfIterations(user.kdfIterations);
   const dataKey = await unlockDataKey(user.email, password, user.kdfSalt, user.kdfIterations, user.encDataKey);
   const privateKey = await unlockPrivateKey(dataKey, user.encPrivateKey);
   s().setKeys({ dataKey, privateKey });
@@ -171,6 +174,8 @@ export async function deleteAttachment(recordId: string, attachmentId: string): 
 
 export async function changeMasterPassword(current: string, next: string): Promise<string> {
   const keys = requireKeys(); const user = s().user!;
+  // The current authKey goes to the server: never derive it with downgraded parameters.
+  assertKdfIterations(user.kdfIterations);
   const currentAuthKey = await computeAuthKey(user.email, current, user.kdfSalt, user.kdfIterations);
   const n = await rewrapForNewPassword(user.email, next, keys.dataKey);
   const rec = await createRecoveryMaterial(keys.dataKey);

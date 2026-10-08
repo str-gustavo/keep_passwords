@@ -1,21 +1,13 @@
 import { api, ApiClientError } from '@/lib/api/client';
 import type { LoginResponse, PreloginResponse, SessionUser } from '@/lib/api/types';
 import { computeAuthKey, computeRecoveryAuthKey, createAccountMaterial, createRecoveryMaterial, recoverDataKey, rewrapForNewPassword, unlockDataKey, unlockPrivateKey, WrongPasswordError } from '@/lib/crypto/account';
-import { KDF_ITERATIONS } from '@/lib/crypto/kdf';
+import { assertKdfIterations } from '@/lib/crypto/kdf';
 import { t } from '@/lib/i18n/pt-br';
 import { loadVault } from '@/lib/vault/actions';
 import { useVault } from '@/lib/vault/store';
 
-/** Same ceiling as the server's zod schema; above it a hostile server could freeze the tab. */
-const KDF_MAX_ITERATIONS = 5_000_000;
-
-/** Anti-downgrade: never derive or use keys with fewer PBKDF2 iterations than this client's floor (nor absurdly many). */
-function assertKdfParams(iterations: unknown): void {
-  if (typeof iterations !== 'number' || !Number.isInteger(iterations) || iterations < KDF_ITERATIONS || iterations > KDF_MAX_ITERATIONS) throw new Error(t.unsafeServerParams);
-}
-
 async function unlockSession(user: SessionUser, dataKey: CryptoKey) {
-  assertKdfParams(user.kdfIterations);
+  assertKdfIterations(user.kdfIterations);
   const privateKey = await unlockPrivateKey(dataKey, user.encPrivateKey);
   useVault.getState().setUser(user);
   useVault.getState().setKeys({ dataKey, privateKey });
@@ -36,10 +28,10 @@ export async function signUp(email: string, name: string, password: string): Pro
 
 export async function signIn(email: string, password: string): Promise<void> {
   const pre = await api.post<PreloginResponse>('/api/auth/prelogin', { email });
-  assertKdfParams(pre.kdfIterations);
+  assertKdfIterations(pre.kdfIterations);
   const authKey = await computeAuthKey(email, password, pre.kdfSalt, pre.kdfIterations);
   const { user } = await api.post<LoginResponse>('/api/auth/login', { email, authKey });
-  assertKdfParams(user.kdfIterations);
+  assertKdfIterations(user.kdfIterations);
   const dataKey = await unlockDataKey(user.email, password, user.kdfSalt, user.kdfIterations, user.encDataKey);
   await unlockSession(user, dataKey);
   await loadVault();

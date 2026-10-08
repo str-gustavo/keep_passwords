@@ -51,7 +51,7 @@ export function ChangePasswordForm({ email }: { email: string }) {
         setCurrent('');
         currentRef.current?.focus();
       } else {
-        setFormError(err instanceof ApiClientError ? err.message : t.genericSaveError);
+        setFormError(err instanceof ApiClientError || (err instanceof Error && err.message === t.unsafeServerParams) ? err.message : t.genericSaveError);
       }
     } finally {
       setBusy(false);

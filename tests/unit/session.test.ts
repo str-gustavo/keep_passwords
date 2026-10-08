@@ -20,6 +20,16 @@ describe('session', () => {
     expect(await readSession(new Request('http://x'))).toBeNull();
     expect(await readSession(new Request('http://x', { headers: { cookie: 'keep_session=garbage' } }))).toBeNull();
     expect(clearSessionCookie()).toMatch(/^keep_session=; Path=\/; HttpOnly; SameSite=Lax; Max-Age=0/);
+    expect(clearSessionCookie()).not.toContain('Secure');
+  });
+  it('marks both the session and the clearing cookie Secure in production', async () => {
+    const env = process.env as Record<string, string | undefined>;
+    const prev = env.NODE_ENV;
+    env.NODE_ENV = 'production';
+    try {
+      expect(await createSessionCookie('11111111-1111-1111-1111-111111111111', 1)).toMatch(/; Secure$/);
+      expect(clearSessionCookie()).toBe('keep_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure');
+    } finally { env.NODE_ENV = prev; }
   });
 });
 
