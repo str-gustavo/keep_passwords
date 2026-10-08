@@ -8,7 +8,7 @@ import type { ExtState } from '@/shared/messages';
 import { getChromeMock, resetChromeMock } from './helpers/chrome-mock';
 import { EMAIL, SERVER, extState, fakeSW, orderOf, sent } from './helpers/popup-sw';
 
-vi.mock('@/shared/messages', () => ({ send: vi.fn() }));
+vi.mock('@/shared/messages', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/shared/messages')>()), send: vi.fn() }));
 const sendMock = vi.mocked(send);
 
 /** Vault tabs need these; they are irrelevant to most app-shell tests. */
@@ -186,6 +186,21 @@ describe('popup shell', () => {
 
     expect(sent(sendMock, 'getState').length).toBeGreaterThan(before);
     expect(await screen.findByRole('heading', { name: 'Cofre bloqueado' })).toBeTruthy();
+  });
+
+  it('stops polling getState once the popup is unmounted', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    fakeSW(sendMock, { getState: () => extState('locked') });
+    const { unmount } = render(<App />);
+
+    await screen.findByRole('heading', { name: 'Cofre bloqueado' });
+    await act(() => vi.advanceTimersByTimeAsync(5_000));
+    const whileOpen = sent(sendMock, 'getState').length;
+    expect(whileOpen).toBeGreaterThanOrEqual(2);
+
+    unmount();
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(sent(sendMock, 'getState')).toHaveLength(whileOpen);
   });
 
   it('shows the "Alterar servidor" form from the sign-in screen and can cancel it', async () => {

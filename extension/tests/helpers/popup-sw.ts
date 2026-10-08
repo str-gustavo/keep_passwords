@@ -1,19 +1,28 @@
 /**
- * A scripted service worker for the popup tests: each test file mocks `@/shared/messages` (`send: vi.fn()`) and wires
- * it here. A handler's return value is what `send` resolves with; a thrown Error becomes the SW's `{ ok: false }`
- * (send rejects with that pt-BR message). A request without a handler fails the test loudly.
+ * A scripted service worker for the popup tests: each test file mocks `@/shared/messages`, keeping the real exports
+ * (SwError) and replacing `send` with a vi.fn, and wires it here. A handler's return value is what `send` resolves
+ * with; an Error thrown by a handler becomes the SW's `{ ok: false }` (send rejects with a SwError carrying that pt-BR
+ * message), except a `TransportError`, which plays a failed sendMessage. A request without a handler fails the test.
  */
 import type { Mock } from 'vitest';
-import type { ExtState, ExtStatus, Req } from '@/shared/messages';
+import { SwError, type ExtState, type ExtStatus, type Req } from '@/shared/messages';
 
 type Handler<K extends Req['type']> = (req: Extract<Req, { type: K }>) => unknown;
 export type Handlers = { [K in Req['type']]?: Handler<K> };
+
+/** Thrown by a handler to simulate a transport failure (no `{ ok: false }` answer at all). */
+export class TransportError extends Error {}
 
 export function fakeSW(send: Mock, handlers: Handlers): void {
   send.mockImplementation(async (req: Req) => {
     const h = handlers[req.type] as ((r: Req) => unknown) | undefined;
     if (!h) throw new Error(`unexpected request in test: ${req.type}`);
-    return h(req);
+    try {
+      return await h(req);
+    } catch (e) {
+      if (e instanceof TransportError || !(e instanceof Error)) throw e;
+      throw new SwError(e.message);
+    }
   });
 }
 

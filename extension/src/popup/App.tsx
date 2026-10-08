@@ -68,11 +68,19 @@ function Vault({ state, version, refreshError, onState, onRefreshed, onChangeSer
   onChangeServer: () => void;
 }) {
   const [active, setActive] = useState<TabId>('site');
+  // Focus moves into a panel only when its tab was chosen with a click, Enter or Space ({ tab, n }: n changes on every
+  // such choice, even of the tab already shown). Arrow keys keep focus on the tab buttons, as WAI-ARIA tabs expect.
+  const [panelFocus, setPanelFocus] = useState<{ tab: TabId; n: number } | null>(null);
   const tab = useActiveTab();
   const tabRefs = useRef(new Map<TabId, HTMLButtonElement>());
   const openApp = useCallback(async () => { await send<null>({ type: 'openApp' }); }, []);
 
-  // WAI-ARIA tabs: arrows / Home / End move between tabs (automatic activation).
+  function choose(id: TabId) {
+    setActive(id);
+    setPanelFocus((p) => ({ tab: id, n: (p?.n ?? 0) + 1 }));
+  }
+
+  // WAI-ARIA tabs: arrows / Home / End move between tabs (automatic activation), focus stays on the tab.
   function onTabKey(e: KeyboardEvent) {
     const i = TABS.findIndex((x) => x.id === active);
     const next = { ArrowRight: i + 1, ArrowLeft: i - 1, Home: 0, End: TABS.length - 1 }[e.key];
@@ -80,6 +88,7 @@ function Vault({ state, version, refreshError, onState, onRefreshed, onChangeSer
     e.preventDefault();
     const id = TABS[(next + TABS.length) % TABS.length]!.id;
     setActive(id);
+    setPanelFocus(null);
     tabRefs.current.get(id)?.focus();
   }
 
@@ -96,7 +105,7 @@ function Vault({ state, version, refreshError, onState, onRefreshed, onChangeSer
             aria-selected={active === x.id}
             aria-controls={`panel-${x.id}`}
             tabIndex={active === x.id ? 0 : -1}
-            onClick={() => setActive(x.id)}
+            onClick={() => choose(x.id)}
             className={cx(
               '-mb-px flex-1 border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
               active === x.id ? 'border-primary text-fg' : 'border-transparent text-fg-muted hover:text-fg',
@@ -109,7 +118,7 @@ function Vault({ state, version, refreshError, onState, onRefreshed, onChangeSer
       <div role="tabpanel" id={`panel-${active}`} aria-labelledby={`tab-${active}`} className="min-h-0 flex-1 overflow-y-auto">
         {refreshError && active !== 'settings' && <div className="px-4 pt-3"><Notice kind="error">{refreshError}</Notice></div>}
         {active === 'site' && <ThisSite tab={tab} version={version} onOpenApp={() => { void openApp().catch(() => undefined); }} />}
-        {active === 'search' && <Search tab={tab} version={version} />}
+        {active === 'search' && <Search tab={tab} version={version} focusSignal={panelFocus?.tab === 'search' ? panelFocus.n : 0} />}
         {active === 'generator' && <Generator />}
         {active === 'settings' && <Settings state={state} onState={onState} onRefreshed={onRefreshed} onOpenApp={openApp} onChangeServer={onChangeServer} />}
       </div>

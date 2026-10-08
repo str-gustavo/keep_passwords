@@ -46,10 +46,18 @@ export interface OpenPopupResult { opened: boolean }
  */
 export interface FillIntoMsg { type: 'fillInto'; id: string }
 
-/** chrome.runtime.sendMessage wrapper: resolves with `data`, throws an Error carrying the pt-BR message on `{ ok: false }`. */
+/**
+ * A `{ ok: false }` answer from the service worker. Its message was written for the user (pt-BR, no secrets), unlike a
+ * transport failure (e.g. "Could not establish connection"), which `send` lets through as a plain Error.
+ */
+export class SwError extends Error {
+  constructor(message: string) { super(message); this.name = 'SwError'; }
+}
+
+/** chrome.runtime.sendMessage wrapper: resolves with `data`, throws a SwError carrying the pt-BR message on `{ ok: false }`. */
 export async function send<T>(req: Req): Promise<T> {
   const res = (await chrome.runtime.sendMessage(req)) as Res<T> | undefined;
   if (!res || typeof res !== 'object') throw new Error('O Nexus Passwords não respondeu. Tente novamente.');
-  if (!res.ok) throw new Error(res.error);
+  if (!res.ok) throw new SwError(res.error);
   return res.data;
 }

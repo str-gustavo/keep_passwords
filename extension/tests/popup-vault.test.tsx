@@ -1,13 +1,14 @@
-import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { App } from '@/popup/App';
+import { TRANSPORT_ERROR } from '@/popup/lib/errors';
 import { send } from '@/shared/messages';
 import type { MatchItem } from '@/shared/messages';
-import { addTab, resetChromeMock } from './helpers/chrome-mock';
-import { extState, fakeSW, sent, type Handlers } from './helpers/popup-sw';
+import { NO_RECEIVER_ERROR, addTab, resetChromeMock } from './helpers/chrome-mock';
+import { TransportError, extState, fakeSW, sent, type Handlers } from './helpers/popup-sw';
 
-vi.mock('@/shared/messages', () => ({ send: vi.fn() }));
+vi.mock('@/shared/messages', async (importOriginal) => ({ ...(await importOriginal<typeof import('@/shared/messages')>()), send: vi.fn() }));
 const sendMock = vi.mocked(send);
 
 const SECRET = 'S3nh@-Sup3r-S3cr3ta!';
@@ -123,6 +124,21 @@ describe('"Este site"', () => {
     expect(close).not.toHaveBeenCalled();
   });
 
+  it('a transport failure shows a pt-BR message, not the raw browser text', async () => {
+    addTab({ url: 'https://github.com/login' });
+    unlockedSW({ fillFromPopup: () => { throw new TransportError(NO_RECEIVER_ERROR); } });
+    vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const user = setup();
+    render(<App />);
+
+    await screen.findByText('GitHub', { selector: '[data-record-title]' });
+    await user.click(within(rowOf('GitHub')).getByRole('button', { name: 'Preencher' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain(TRANSPORT_ERROR);
+    expect(alert.textContent).not.toContain('Receiving end');
+  });
+
   it('shows the TOTP code with its countdown and copies it', async () => {
     addTab({ url: 'https://github.com/login' });
     unlockedSW();
@@ -137,6 +153,30 @@ describe('"Este site"', () => {
 
     await user.click(within(row).getByRole('button', { name: /Copiar código 2FA/ }));
     await waitFor(() => expect(board).toEqual(['492039']));
+  });
+
+  it('fetches the next TOTP code when the current one expires', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      addTab({ url: 'https://github.com/login' });
+      const codes = [{ code: '111111', remaining: 3, period: 30 }, { code: '222222', remaining: 30, period: 30 }];
+      unlockedSW({ totpFor: () => codes.shift() ?? { code: '333333', remaining: 30, period: 30 } });
+      render(<App />);
+
+      await screen.findByText('111 111');
+      expect(sent(sendMock, 'totpFor')).toHaveLength(1);
+      await act(() => vi.advanceTimersByTimeAsync(2_000));
+      expect(sent(sendMock, 'totpFor')).toHaveLength(1); // still valid: no request
+      await act(() => vi.advanceTimersByTimeAsync(1_500));
+
+      expect(await screen.findByText('222 222')).toBeTruthy();
+      expect(screen.queryByText('111 111')).toBeNull();
+      expect(sent(sendMock, 'totpFor')).toHaveLength(2);
+      await act(() => vi.advanceTimersByTimeAsync(10_000));
+      expect(sent(sendMock, 'totpFor')).toHaveLength(2); // the new code lasts 30 s
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('empty state offers to create the record in the app', async () => {
@@ -161,6 +201,48 @@ describe('"Este site"', () => {
 });
 
 describe('"Buscar"', () => {
+  it('arrow keys move between tabs without the search box stealing focus; a click or Enter focuses it', async () => {
+    addTab({ url: 'https://github.com/login' });
+    unlockedSW();
+    const user = setup();
+    render(<App />);
+
+    const siteTab = await screen.findByRole('tab', { name: 'Este site' });
+    siteTab.focus();
+    await user.keyboard('{ArrowRight}');
+    const searchTab = screen.getByRole('tab', { name: 'Buscar' });
+    expect(searchTab.getAttribute('aria-selected')).toBe('true');
+    await screen.findByRole('searchbox', { name: 'Buscar registros' });
+    await waitFor(() => expect(sent(sendMock, 'search')).toHaveLength(1));
+    expect(document.activeElement).toBe(searchTab);
+
+    await user.keyboard('{ArrowRight}');
+    expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Gerador' }));
+    await user.keyboard('{ArrowLeft}');
+    expect(document.activeElement).toBe(searchTab);
+
+    await user.keyboard('{Enter}'); // already active: Enter moves into the panel
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Buscar registros' })));
+
+    await user.click(screen.getByRole('tab', { name: 'Gerador' }));
+    await user.click(screen.getByRole('tab', { name: 'Buscar' }));
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('searchbox', { name: 'Buscar registros' })));
+  });
+
+  it('hides "Preencher" when the active tab is not a web page, keeping the copy actions', async () => {
+    addTab({ url: 'chrome://extensions' });
+    unlockedSW();
+    const user = setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Buscar' }));
+    const row = await waitFor(() => rowOf('Banco'));
+    expect(within(row).queryByRole('button', { name: 'Preencher' })).toBeNull();
+    expect(screen.queryAllByRole('button', { name: 'Preencher' })).toHaveLength(0);
+    expect(within(row).getByRole('button', { name: 'Copiar senha' })).toBeTruthy();
+    expect(within(row).getByRole('button', { name: 'Copiar login' })).toBeTruthy();
+  });
+
   it('searches as you type and Escape clears the query', async () => {
     addTab({ url: 'https://github.com/login' });
     unlockedSW();
