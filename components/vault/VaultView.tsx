@@ -1,6 +1,6 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, MousePointerClick, Plus, RotateCw, Search } from 'lucide-react';
+import { ArrowLeft, Folder, MousePointerClick, Plus, RotateCw, Search, Users } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
@@ -8,9 +8,11 @@ import { Spinner } from '@/components/ui/Spinner';
 import { t } from '@/lib/i18n/pt-br';
 import { cn } from '@/lib/ui/cn';
 import { loadVault } from '@/lib/vault/actions';
-import { filterRecords, folderNameOf, type ListFilter } from '@/lib/vault/selectors';
+import { filterRecords, type ListFilter } from '@/lib/vault/selectors';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
+import { FolderHeaderActions } from './FolderHeaderActions';
+import { MoveToFolderDialog } from './MoveToFolderDialog';
 import { RecordDetail } from './RecordDetail';
 import { RecordForm } from './RecordForm';
 import { RecordList } from './RecordList';
@@ -19,8 +21,6 @@ import { TrashHeader } from './TrashHeader';
 
 export type VaultEditing = { mode: 'new' } | { mode: 'edit'; id: string } | null;
 
-// Task 26 (move-to-folder dialog) replaces this.
-const openMoveDialog = () => {};
 
 export function VaultView({ filter, title }: { filter: ListFilter; title: string }) {
   const records = useVault((s) => s.records);
@@ -32,8 +32,10 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
   const [query, setQuery] = useState('');
   const [editing, setEditing] = useState<VaultEditing>(null);
   const [sharing, setSharing] = useState<VaultRecord | null>(null);
+  const [movingId, setMovingId] = useState<string | null>(null);
 
-  const heading = filter.kind === 'folder' ? folderNameOf(folders, filter.folderId) ?? title : title;
+  const folder = filter.kind === 'folder' ? folders.find((f) => f.id === filter.folderId) : undefined;
+  const heading = folder?.name ?? title;
   const list = useMemo(() => filterRecords(records, filter, query, userId), [records, filter, query, userId]);
   // Selection is scoped to the current filter (search ignored): a record that leaves the view, e.g. moved to the
   // trash, stops showing in the detail pane and mobile falls back to the list.
@@ -41,6 +43,8 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
   const selected = inScope.find((r) => r.id === selectedId) ?? null;
   // The live record (not a snapshot): attachments uploaded from the form show up in it immediately.
   const editingRecord = editing?.mode === 'edit' ? records.find((r) => r.id === editing.id) : undefined;
+  // Live record as well: the move dialog's shared-folder checkboxes follow each add/remove.
+  const movingRecord = movingId ? records.find((r) => r.id === movingId) : undefined;
   // New records land in the personal folder being viewed; shared folders need an explicit "add to folder".
   const newRecordFolderId = filter.kind === 'folder' && folders.some((f) => f.id === filter.folderId && f.kind === 'personal') ? filter.folderId : null;
 
@@ -48,8 +52,12 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
     <div className="flex min-h-0 flex-1 flex-col">
       <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3 lg:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          {folder && (folder.kind === 'shared'
+            ? <Users className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
+            : <Folder className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />)}
           <h1 className="truncate text-lg font-semibold text-fg">{heading}</h1>
           {status === 'loading' && <Spinner className="h-4 w-4 text-primary" />}
+          {folder && <FolderHeaderActions folder={folder} />}
         </div>
         <div className="relative order-last w-full sm:order-none sm:w-72 lg:w-80">
           <label htmlFor="vault-search" className="sr-only">{t.search}</label>
@@ -94,7 +102,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
                 record={selected}
                 onEdit={() => setEditing({ mode: 'edit', id: selected.id })}
                 onShare={() => setSharing(selected)}
-                onMove={openMoveDialog}
+                onMove={() => setMovingId(selected.id)}
                 onDeselect={() => setSelected(null)}
               />
             ) : (
@@ -107,6 +115,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
       </div>
 
       {editing?.mode === 'new' && <RecordForm key="new" mode="new" folderId={newRecordFolderId} onClose={() => setEditing(null)} />}
+      {movingRecord && <MoveToFolderDialog open record={movingRecord} onClose={() => setMovingId(null)} />}
       {editing?.mode === 'edit' && editingRecord?.data && (
         <RecordForm key={editingRecord.id} mode="edit" record={editingRecord} onClose={() => setEditing(null)} />
       )}

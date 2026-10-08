@@ -6,6 +6,7 @@ import { toast } from '@/components/ui/Toast';
 import { t } from '@/lib/i18n/pt-br';
 import { cn } from '@/lib/ui/cn';
 import { purgeRecord, restoreRecord, setFavorite, trashRecord } from '@/lib/vault/actions';
+import { canMoveRecord } from '@/lib/vault/folder-permissions';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
@@ -51,7 +52,8 @@ export function DetailActions({ record, onEdit, onShare, onMove, onDeselect }: {
       {!trashed && readable && canShare && (
         <Button variant="secondary" size="sm" data-testid="detail-share" onClick={onShare}><Share2 className="h-4 w-4" aria-hidden="true" />{t.share}</Button>
       )}
-      {!trashed && isOwner && (
+      {/* A direct key lets anyone file the record in their own folders; adding it to a shared folder needs canShare. */}
+      {canMoveRecord(record) && (
         <Button variant="secondary" size="sm" data-testid="detail-move" onClick={onMove}><FolderInput className="h-4 w-4" aria-hidden="true" />{t.move}</Button>
       )}
       {!trashed && isOwner && (
