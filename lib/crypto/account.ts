@@ -7,19 +7,22 @@ import { generatePhrase, normalizePhrase } from './bip39';
 export interface RecoveryMaterial { phrase: string; recoveryAuthKey: string; recoverySalt: string; encDataKeyRecovery: string }
 export interface AccountMaterial {
   kdfSalt: string; kdfIterations: number; authKey: string; encDataKey: string;
-  publicKey: string; encPrivateKey: string; recovery: RecoveryMaterial;
+  publicKey: string; encPrivateKey: string; recovery: Omit<RecoveryMaterial, 'phrase'>;
 }
 export class WrongPasswordError extends Error {
   constructor() { super('Senha mestra incorreta'); this.name = 'WrongPasswordError'; }
 }
 
-export async function createAccountMaterial(email: string, password: string) {
+export async function createAccountMaterial(
+  email: string,
+  password: string,
+): Promise<AccountMaterial & { recoveryPhrase: string; dataKey: CryptoKey; privateKey: CryptoKey }> {
   const dataKey = await generateAesKey();
   const wrapped = await rewrapForNewPassword(email, password, dataKey);
   const pair = await generateRsaKeyPair();
   const encPrivateKey = toBase64(await encryptBytes(dataKey, pair.privateKeyPkcs8));
-  const recovery = await createRecoveryMaterial(dataKey);
-  return { ...wrapped, publicKey: pair.publicKeySpki, encPrivateKey, recovery, dataKey, privateKey: pair.privateKey };
+  const { phrase, ...recovery } = await createRecoveryMaterial(dataKey);
+  return { ...wrapped, publicKey: pair.publicKeySpki, encPrivateKey, recovery, recoveryPhrase: phrase, dataKey, privateKey: pair.privateKey };
 }
 
 export async function computeAuthKey(email: string, password: string, kdfSalt: string, kdfIterations: number) {

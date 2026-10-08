@@ -18,10 +18,11 @@ describe('bip39', () => {
     expect(isValidPhrase(a.toUpperCase())).toBe(true);
   });
   it('rejects wrong checksum, unknown words and wrong length', () => {
-    const words = generatePhrase().split(' ');
-    const swapped = [...words];
-    swapped[0] = words[0] === 'abandon' ? 'ability' : 'abandon';
-    expect(isValidPhrase(swapped.join(' '))).toBe(false);
+    const valid = [...Array<string>(23).fill('abandon'), 'art'];
+    expect(isValidPhrase(valid.join(' '))).toBe(true);
+    const badChecksum = [...valid.slice(0, 23), 'about'];
+    expect(isValidPhrase(badChecksum.join(' '))).toBe(false);
+    const words = valid;
     expect(isValidPhrase(words.slice(0, 12).join(' '))).toBe(false);
     expect(isValidPhrase('notaword ' + words.slice(1).join(' '))).toBe(false);
   });

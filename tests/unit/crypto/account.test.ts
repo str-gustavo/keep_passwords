@@ -14,8 +14,10 @@ describe('account material', () => {
     expect(Buffer.from(m.authKey, 'base64').length).toBe(32);
     expect(m.encDataKey).not.toContain(password);
     expect(m.publicKey.length).toBeGreaterThan(100);
-    expect(isValidPhrase(m.recovery.phrase)).toBe(true);
-    const json = JSON.stringify({ ...m, dataKey: undefined, privateKey: undefined });
+    expect(isValidPhrase(m.recoveryPhrase)).toBe(true);
+    const json = JSON.stringify({ ...m, dataKey: undefined, privateKey: undefined, recoveryPhrase: undefined });
+    expect(json).not.toContain(m.recoveryPhrase.split(' ')[0]!);
+    expect(json).not.toContain(password);
     expect(json).not.toContain(Buffer.from(await exportAesKey(m.dataKey)).toString('base64'));
   });
 
@@ -44,6 +46,8 @@ describe('account material', () => {
     expect(await computeRecoveryAuthKey(r.phrase.toUpperCase() + ' ', r.recoverySalt)).toBe(r.recoveryAuthKey);
     const dk = await recoverDataKey(r.phrase, r.recoverySalt, r.encDataKeyRecovery);
     expect(await decryptString(dk, await encryptString(m.dataKey, 'x'))).toBe('x');
-    await expect(recoverDataKey(r.phrase.replace(/^\w+/, 'zebra'), r.recoverySalt, r.encDataKeyRecovery)).rejects.toBeInstanceOf(WrongPasswordError);
+    const words = r.phrase.split(' ');
+    words[0] = words[0] === 'zebra' ? 'zoo' : 'zebra';
+    await expect(recoverDataKey(words.join(' '), r.recoverySalt, r.encDataKeyRecovery)).rejects.toBeInstanceOf(WrongPasswordError);
   });
 });

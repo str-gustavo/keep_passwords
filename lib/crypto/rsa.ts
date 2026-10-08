@@ -16,9 +16,9 @@ export async function generateRsaKeyPair() {
     privateKeyPkcs8: new Uint8Array(await crypto.subtle.exportKey('pkcs8', pair.privateKey)),
   };
 }
-export const importPublicKey = (spki: string) => crypto.subtle.importKey('spki', fromBase64(spki) as BufferSource, ALG, true, ['encrypt']);
+export const importPublicKey = (spki: string) => crypto.subtle.importKey('spki', fromBase64(spki), ALG, true, ['encrypt']);
 export const importPrivateKey = (pkcs8: Uint8Array) => crypto.subtle.importKey('pkcs8', pkcs8 as BufferSource, ALG, true, ['decrypt']);
 export const rsaWrapAesKey = async (publicKey: CryptoKey, key: CryptoKey) =>
   toBase64(new Uint8Array(await crypto.subtle.encrypt(ALG, publicKey, await exportAesKey(key))));
 export const rsaUnwrapAesKey = async (privateKey: CryptoKey, blob: string) =>
-  importAesKey(new Uint8Array(await crypto.subtle.decrypt(ALG, privateKey, fromBase64(blob) as BufferSource)));
+  importAesKey(new Uint8Array(await crypto.subtle.decrypt(ALG, privateKey, fromBase64(blob))));
