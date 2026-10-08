@@ -10,3 +10,6 @@ next-env.d.ts
 *.md
 .superpowers/
 .claude/worktrees/
+extension/dist
+extension/release
+extension/node_modules

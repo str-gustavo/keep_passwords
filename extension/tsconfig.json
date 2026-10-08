@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["dom", "dom.iterable", "esnext"],
+    "module": "esnext",
+    "moduleResolution": "bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "isolatedModules": true,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
+    "jsx": "react-jsx",
+    "types": ["chrome", "vite/client"],
+    "noEmit": true,
+    "paths": {
+      "@app/*": ["../lib/*"],
+      "@/lib/*": ["../lib/*"],
+      "@/*": ["./src/*"]
+    }
+  },
+  "include": ["src", "tests", "vite.aliases.ts", "vite.config.ts", "vite.content.config.ts", "vitest.config.ts"]
+}

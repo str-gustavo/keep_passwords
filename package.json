@@ -2,6 +2,9 @@
   "name": "nexus-passwords",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "extension"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",
@@ -12,7 +15,10 @@
     "test:watch": "vitest",
     "e2e": "node e2e/run.mjs",
     "e2e:install": "agent-browser install",
-    "check": "npm run typecheck && npm run lint && npm run test",
+    "check": "npm run typecheck && npm run lint && npm run test && npm run ext:check",
+    "ext:build": "npm run build -w extension",
+    "ext:check": "npm run check -w extension",
+    "ext:zip": "npm run zip -w extension",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "icons": "node scripts/build-icons.mjs"

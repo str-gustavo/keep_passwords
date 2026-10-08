@@ -1,0 +1,35 @@
+@import "tailwindcss";
+
+/* Nexus Passwords palette (same values as the web app's light theme). The popup is light only. */
+@theme {
+  --color-primary: #FA681F;
+  --color-primary-hover: #E55A12;
+  --color-primary-active: #C2410C;
+  --color-primary-soft: #FFE4D3;
+  /* Orange text on light surfaces (AA). */
+  --color-primary-text: #B9480F;
+  /* Navy text on solid orange (AA). */
+  --color-fg-on-primary: #0D2A4D;
+  --color-navy: #0D2A4D;
+  --color-navy-light: #125375;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F3F5F7;
+  --color-border: #E3E8EF;
+  --color-fg: #1D3447;
+  --color-fg-muted: #5B6B7B;
+  --color-success: #15803D;
+  --color-danger: #B91C1C;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+@layer base {
+  html, body {
+    background: var(--color-surface);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+  }
+  body {
+    min-width: 360px;
+    margin: 0;
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "name": "br.com.nexuslogtec.passwords",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/copy-static.mjs && vite build && vite build --config vite.content.config.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "check": "npm run typecheck && npm run test",
+    "zip": "node scripts/zip.mjs",
+    "gen-key": "node scripts/gen-key.mjs"
+  },
+  "dependencies": {
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/adm-zip": "^0.5",
+    "@types/chrome": "^0.3.4",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "^6.1.2",
+    "adm-zip": "^0.6.1",
+    "jsdom": "^30.1.2",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.9.0",
+    "vite": "^8.3.4",
+    "vitest": "^3.2.0"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "Nexus Passwords",
+  "short_name": "Nexus Pass",
+  "version": "0.1.0",
+  "description": "Gerenciador de senhas zero-knowledge da Nexus Logtec: preenche e salva suas credenciais em qualquer site.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Nexus Passwords",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "background": {
+    "service_worker": "sw.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ],
+  "permissions": ["storage", "alarms", "tabs", "activeTab", "scripting"],
+  "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
+  "minimum_chrome_version": "116"
+}
