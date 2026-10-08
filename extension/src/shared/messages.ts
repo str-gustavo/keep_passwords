@@ -9,9 +9,10 @@ export interface MatchItem { id: string; title: string; login: string; url: stri
 export interface GenOptions { length: number; upper: boolean; lower: boolean; digits: boolean; symbols: boolean; excludeAmbiguous: boolean }
 export type Req =
   | { type: 'getState' } | { type: 'setServer'; url: string } | { type: 'signIn'; email: string; password: string }
-  | { type: 'unlock'; password: string } | { type: 'lock' } | { type: 'signOut' } | { type: 'refresh' } | { type: 'openApp' }
+  | { type: 'unlock'; password: string } | { type: 'lock' } | { type: 'signOut' } | { type: 'refresh'; force?: boolean } | { type: 'openApp' }
   | { type: 'matchesForUrl'; url: string } | { type: 'search'; query: string }
   | { type: 'fillRequest'; id: string } | { type: 'totpFor'; id: string }
+  | { type: 'revealPassword'; id: string }                  // popup.html only → { password } (copy to clipboard)
   | { type: 'savePending'; url: string; login: string; password: string } | { type: 'getPending' } | { type: 'discardPending' } | { type: 'neverForSite'; host: string }
   | { type: 'saveNew'; url: string; login: string; password: string; title: string } | { type: 'updatePassword'; id: string; password: string }
   | { type: 'generatePassword'; opts: GenOptions }
@@ -22,12 +23,17 @@ export interface Pending { url: string; host: string; login: string; password: s
 
 /** `fillRequest` answer: the one record the user picked, for the page it was checked against. */
 export interface Credentials { login: string; password: string }
+/** `revealPassword` answer (popup only). */
+export interface RevealedPassword { password: string }
 /** `totpFor` answer. */
 export interface TotpCode { code: string; remaining: number; period: number }
 /** `openPopup` answer: false when Chrome refused (no user gesture, unsupported); the UI then explains the toolbar icon. */
 export interface OpenPopupResult { opened: boolean }
-/** Service worker → content script (top frame of the validated tab) after `fillFromPopup`. */
-export interface FillIntoMsg { type: 'fillInto'; login: string; password: string }
+/**
+ * Service worker → content script (top frame of the validated tab) after `fillFromPopup`. Carries no secret: the content
+ * script answers by sending `fillRequest` with this id, which the service worker validates against its real URL.
+ */
+export interface FillIntoMsg { type: 'fillInto'; id: string }
 
 /** chrome.runtime.sendMessage wrapper: resolves with `data`, throws an Error carrying the pt-BR message on `{ ok: false }`. */
 export async function send<T>(req: Req): Promise<T> {

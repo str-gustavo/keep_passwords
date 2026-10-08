@@ -1,10 +1,9 @@
 // Bearer-token client for the Nexus Passwords server, used only by the service worker (content scripts never call the
 // API). The extension holds host permission for the configured origin, so no CORS is involved; cookies are never sent.
 
-/** An error whose message is safe to show the user as is (pt-BR, no secrets). */
-export class ExtError extends Error {
-  constructor(message: string) { super(message); this.name = 'ExtError'; }
-}
+import { ExtError } from '@/shared/errors';
+
+export { ExtError };
 
 /** A failed API call: the server's `{ error: { code, message } }`, or status 0 / code `network` when it was unreachable. */
 export class ExtApiError extends ExtError {

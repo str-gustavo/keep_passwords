@@ -32,7 +32,8 @@ beforeEach(() => {
 
 describe('fillRequest', () => {
   it('fillRequest refuses when the record does not match the sender tab url', async () => {
-    await saveSession({ serverUrl: 'http://x', token: 't', user, secrets, vault: [r({ id: '1', url: 'https://github.com', login: 'ana', password: 'pw' })] });
+    // lastActivity: now — requests enforce auto-lock, and a session idle since 1970 would be locked first.
+    await saveSession({ serverUrl: 'http://x', token: 't', user, secrets, vault: [r({ id: '1', url: 'https://github.com', login: 'ana', password: 'pw' })], lastActivity: Date.now() });
     const sender = { id: MOCK_EXTENSION_ID, tab: { id: 7, url: 'https://evil.com/login' } } as chrome.runtime.MessageSender;
     await expect(handle({ type: 'fillRequest', id: '1' }, sender)).resolves.toEqual({ ok: false, error: 'Registro não corresponde a este site' });
     const ok = await handle({ type: 'fillRequest', id: '1' }, { id: MOCK_EXTENSION_ID, tab: { id: 7, url: 'https://github.com/login' } } as never);
@@ -58,6 +59,12 @@ describe('fillRequest', () => {
     await expect(handle({ type: 'fillRequest', id: '1' }, iframe)).resolves.toEqual({ ok: false, error: 'Registro não corresponde a este site' });
   });
 
+  it('refuses a frame of the record site embedded in a tab on another site', async () => {
+    await unlocked();
+    const framed = pageSender('https://evil.com/', 7, 'https://github.com/login');
+    await expect(handle({ type: 'fillRequest', id: '1' }, framed)).resolves.toEqual({ ok: false, error: 'Registro não corresponde a este site' });
+  });
+
   it('refuses while locked and for unknown records', async () => {
     await locked();
     await expect(handle({ type: 'fillRequest', id: '1' }, pageSender('https://github.com/login'))).resolves.toEqual({ ok: false, error: 'Cofre bloqueado' });
@@ -65,10 +72,30 @@ describe('fillRequest', () => {
     await expect(handle({ type: 'fillRequest', id: 'nope' }, pageSender('https://github.com/login'))).resolves.toEqual({ ok: false, error: 'Registro não encontrado' });
   });
 
-  it('counts as activity (touch)', async () => {
-    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: 1 });
+  it('counts as activity (touch) once validated; a refused request does not', async () => {
+    const before = Date.now() - 30_000; // lockMinutes is 1: still active
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: before });
+    await handle({ type: 'fillRequest', id: '1' }, pageSender('https://evil.com/login'));
+    expect((await loadSession()).lastActivity).toBe(before);
     await handle({ type: 'fillRequest', id: '1' }, pageSender('https://github.com/login'));
-    expect((await loadSession()).lastActivity).toBeGreaterThan(1);
+    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
+  });
+});
+
+describe('request-time auto-lock', () => {
+  it('an idle vault is locked before the request is served, even without the alarm', async () => {
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: Date.now() - 2 * 60_000 }); // 2 × lockMinutes
+    await expect(handle({ type: 'fillRequest', id: '1' }, pageSender('https://github.com/login'))).resolves.toEqual({ ok: false, error: 'Cofre bloqueado' });
+    await expect(handle({ type: 'getState' }, pageSender('https://github.com/login'))).resolves.toMatchObject({ ok: true, data: { status: 'locked', recordCount: 0 } });
+    const s = await loadSession();
+    expect(s.secrets).toBeNull();
+    expect(s.vault).toEqual([]);
+  });
+
+  it('a popup request on an expired session locks instead of extending it', async () => {
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: Date.now() - 2 * 60_000 });
+    await expect(handle({ type: 'search', query: '' }, popupSender)).resolves.toEqual({ ok: false, error: 'Cofre bloqueado' });
+    expect(stateOf(await loadSession()).status).toBe('locked');
   });
 });
 
@@ -80,6 +107,13 @@ describe('matchesForUrl', () => {
     const own = await handle({ type: 'matchesForUrl', url: 'https://evil.com' }, pageSender('https://github.com/login'));
     expect(own).toEqual({ ok: true, data: [{ id: '1', title: 'GitHub', login: 'ana', url: 'https://github.com', hasTotp: true }] });
     expect(JSON.stringify(own)).not.toMatch(/"password"|pw|otpauth|recordKeyRaw/);
+  });
+
+  it('from a page does not extend the session', async () => {
+    const before = Date.now() - 30_000;
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: before });
+    await handle({ type: 'matchesForUrl', url: 'https://github.com' }, pageSender('https://github.com/login'));
+    expect((await loadSession()).lastActivity).toBe(before);
   });
 
   it('uses the payload url only for the popup (an extension page)', async () => {
@@ -108,11 +142,35 @@ describe('getState', () => {
     expect(JSON.stringify(res)).not.toMatch(/secret-token|encDataKey|kdfSalt/);
   });
 
-  it('while unlocked carries only a count, and does not count as activity', async () => {
-    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github, bank], lastActivity: 1 });
+  it('while unlocked carries only a count; from a page it does not count as activity, from the popup it does', async () => {
+    const before = Date.now() - 30_000;
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github, bank], lastActivity: before });
     const res = await handle({ type: 'getState' }, pageSender('https://github.com'));
     expect(res).toEqual({ ok: true, data: { status: 'unlocked', serverUrl: SERVER, email: 'a@b.c', lockMinutes: 1, recordCount: 2 } });
-    expect((await loadSession()).lastActivity).toBe(1);
+    expect((await loadSession()).lastActivity).toBe(before);
+    await handle({ type: 'getState' }, popupSender);
+    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
+  });
+});
+
+describe('revealPassword', () => {
+  it('gives popup.html one record password', async () => {
+    await unlocked();
+    await expect(handle({ type: 'revealPassword', id: '2' }, popupSender)).resolves.toEqual({ ok: true, data: { password: 'pw2' } });
+  });
+  it('is refused for a content script, even on the matching site', async () => {
+    await unlocked();
+    await expect(handle({ type: 'revealPassword', id: '1' }, pageSender('https://github.com/login'))).resolves.toEqual(INVALID);
+  });
+  it('is refused for a foreign sender id and for other extension pages', async () => {
+    await unlocked();
+    await expect(handle({ type: 'revealPassword', id: '1' }, { ...popupSender, id: 'otherextensionidotherextensionid' })).resolves.toEqual(INVALID);
+    const options = { ...popupSender, url: `${popupSender.url!.replace('/popup.html', '/options.html')}` };
+    await expect(handle({ type: 'revealPassword', id: '1' }, options)).resolves.toEqual(INVALID);
+  });
+  it('is refused while locked', async () => {
+    await locked();
+    await expect(handle({ type: 'revealPassword', id: '1' }, popupSender)).resolves.toEqual({ ok: false, error: 'Cofre bloqueado' });
   });
 });
 
@@ -120,6 +178,7 @@ describe('popup-only messages', () => {
   const popupOnly: Req[] = [
     { type: 'setServer', url: 'https://cofre.example.com' }, { type: 'signIn', email: 'a@b.c', password: 'x' }, { type: 'unlock', password: 'x' },
     { type: 'signOut' }, { type: 'refresh' }, { type: 'search', query: '' }, { type: 'fillFromPopup', id: '1', tabId: 7 },
+    { type: 'revealPassword', id: '1' },
   ];
   it.each(popupOnly)('$type is refused from a content script', async (req) => {
     await unlocked();
@@ -160,12 +219,13 @@ describe('totpFor', () => {
 });
 
 describe('fillFromPopup', () => {
-  it('validates the tab url and messages only that tab top frame', async () => {
+  it('validates the tab url and sends only the record id to that tab top frame (no secret)', async () => {
     await unlocked();
     const tab = addTab({ url: 'https://github.com/login' });
     const res = await handle({ type: 'fillFromPopup', id: '1', tabId: tab.id! }, popupSender);
     expect(res).toEqual({ ok: true, data: null });
-    expect(getChromeMock().tabs.sendMessage).toHaveBeenCalledWith(tab.id, { type: 'fillInto', login: 'ana', password: 'pw' }, { frameId: 0 });
+    expect(getChromeMock().tabs.sendMessage).toHaveBeenCalledWith(tab.id, { type: 'fillInto', id: '1' }, { frameId: 0 });
+    expect(JSON.stringify(getChromeMock().tabs.sendMessage.mock.calls)).not.toMatch(/pw|ana/);
   });
   it('refuses a tab on another site', async () => {
     await unlocked();
@@ -247,10 +307,13 @@ describe('server and account', () => {
     expect(await loadSession()).toMatchObject({ token: null, user: null, secrets: null, vault: [] });
   });
 
-  it('refresh forces a vault download', async () => {
+  it('refresh downloads with the 30 s minimum unless force is set', async () => {
     await unlocked();
     await handle({ type: 'refresh' }, popupSender);
-    expect(vault.loadVault).toHaveBeenCalledWith(true);
+    expect(vault.loadVault).toHaveBeenLastCalledWith(false);
+    await handle({ type: 'refresh', force: true }, popupSender);
+    expect(vault.loadVault).toHaveBeenLastCalledWith(true);
+    await expect(handle({ type: 'refresh', force: 'yes' } as unknown as Req, popupSender)).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
   });
 });
 

@@ -17,7 +17,8 @@ beforeEach(async () => {
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe('service worker entry', () => {
-  it('restricts storage.session to trusted contexts and answers runtime messages asynchronously', async () => {
+  it('restricts storage.session and storage.local to trusted contexts and answers runtime messages asynchronously', async () => {
+    await vi.waitFor(() => expect(getChromeMock().storage.local.setAccessLevel).toHaveBeenCalledWith({ accessLevel: 'TRUSTED_CONTEXTS' }));
     expect(getChromeMock().storage.session.setAccessLevel).toHaveBeenCalledWith({ accessLevel: 'TRUSTED_CONTEXTS' });
     await saveSession({ serverUrl: SERVER });
     const res = await sendMessageFrom({ tab: { id: 3, url: 'https://github.com/' } as chrome.tabs.Tab, url: 'https://github.com/' }, { type: 'getState' });
@@ -59,5 +60,18 @@ describe('service worker entry', () => {
     await sendMessageFrom({ url: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/popup.html' }, { type: 'lock' });
     await vi.waitFor(() => expect(chromeMock.action.setBadgeText).toHaveBeenLastCalledWith({ text: '', tabId: tab.id }));
     await flush();
+  });
+
+  it('clears the badge of every tab when the vault auto-locks', async () => {
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: vaultList, lastActivity: Date.now() - 5 * 60_000 });
+    const a = addTab({ url: 'https://github.com/', active: false });
+    const b = addTab({ url: 'https://other.com/', active: false });
+    const chromeMock = getChromeMock();
+    chromeMock.action.setBadgeText.mockClear();
+    await fireAlarm(AUTOLOCK_ALARM);
+    await vi.waitFor(() => {
+      expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: '', tabId: a.id });
+      expect(chromeMock.action.setBadgeText).toHaveBeenCalledWith({ text: '', tabId: b.id });
+    });
   });
 });

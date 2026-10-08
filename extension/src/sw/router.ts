@@ -1,17 +1,23 @@
 // The service worker's message router. Who may ask what:
 // - every message must come from this extension (sender.id); anything else is "Origem inválida";
-// - extension pages (the popup) are trusted with the account flows, search and fill-from-popup;
+// - extension pages (the popup) are trusted with the account flows, search, fill-from-popup and, from popup.html only,
+//   revealing one password;
 // - content scripts are identified by the tab they run in: they only ever see or receive records whose URL matches
 //   the tab's URL (sender.tab.url, never a URL from the payload) and, inside an iframe, the frame's URL too.
+// Auto-lock is enforced at request time as well (not only by the alarm), and reads by pages never extend the session.
 import { WrongPasswordError } from '@app/crypto/account';
 import { generatePassword } from '@app/generator/password';
 import { generateTotp, parseOtpauth, totpRemainingSeconds } from '@app/crypto/totp';
 import { t } from '@app/i18n/pt-br';
 import { APP_VAULT_PATH } from '@/shared/constants';
 import { urlsMatch } from '@/shared/domain';
-import type { Credentials, FillIntoMsg, GenOptions, OpenPopupResult, Req, Res, TotpCode } from '@/shared/messages';
-import { ExtError } from './api';
-import { clearSession, loadSession, lockSession, requireUnlocked, saveSession, signOutSession, stateOf, touch, type VaultRecordLite } from './session';
+import { ExtError } from '@/shared/errors';
+import type { Credentials, FillIntoMsg, GenOptions, OpenPopupResult, Req, Res, RevealedPassword, TotpCode } from '@/shared/messages';
+import { serverOrigin } from '@/shared/server-url';
+import {
+  checkAutoLock, clearSession, loadSession, lockSession, requireUnlocked, saveSession, signOutSession, stateOf, touch,
+  type VaultRecordLite,
+} from './session';
 import { findRecord, loadVault, matches, saveNewRecord, search, signIn, unlock, updateRecordPassword } from './vault';
 
 const INVALID_ORIGIN = 'Origem inválida';
@@ -19,14 +25,18 @@ const INVALID_MESSAGE = 'Mensagem inválida';
 const NOT_THIS_SITE = 'Registro não corresponde a este site';
 const NEEDS_SERVER = 'Configure o endereço do servidor.';
 const NOT_AVAILABLE = 'Recurso ainda não disponível.';
+const POPUP_PATH = '/popup.html';
 
 type PageOrigin = { kind: 'page'; tabUrl: string; frameUrl: string | null; windowId: number | undefined };
-type Origin = { kind: 'extension' } | PageOrigin;
+type ExtensionOrigin = { kind: 'extension'; path: string };
+type Origin = ExtensionOrigin | PageOrigin;
 
 /** Classifies the sender, or null when it is not one of this extension's own contexts. */
 function originOf(sender: chrome.runtime.MessageSender | undefined): Origin | null {
   if (!sender || sender.id !== chrome.runtime.id) return null;
-  if (typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''))) return { kind: 'extension' };
+  if (typeof sender.url === 'string' && sender.url.startsWith(chrome.runtime.getURL(''))) {
+    try { return { kind: 'extension', path: new URL(sender.url).pathname }; } catch { return null; }
+  }
   const tabUrl = sender.tab?.url;
   if (typeof tabUrl === 'string' && tabUrl) return { kind: 'page', tabUrl, frameUrl: typeof sender.url === 'string' ? sender.url : null, windowId: sender.tab?.windowId };
   return null;
@@ -34,12 +44,14 @@ function originOf(sender: chrome.runtime.MessageSender | undefined): Origin | nu
 
 /** A URL belongs to the sending page when it matches the tab's URL and, for an iframe, the frame's URL as well. */
 const allowedFor = (url: string, o: PageOrigin): boolean => urlsMatch(url, o.tabUrl) && (o.frameUrl === null || urlsMatch(url, o.frameUrl));
-const recordFor = (r: VaultRecordLite, o: Origin): void => {
+function recordFor(r: VaultRecordLite, o: Origin): void {
   if (o.kind === 'page' && !allowedFor(r.url, o)) throw new ExtError(NOT_THIS_SITE);
-};
-function extensionOnly(o: Origin): void {
+}
+function extensionOnly(o: Origin): asserts o is ExtensionOrigin {
   if (o.kind !== 'extension') throw new ExtError(INVALID_ORIGIN);
 }
+/** Page-originated actions extend the session only once they passed validation (popup requests are touched up front). */
+const touchFromPage = (o: Origin) => (o.kind === 'page' ? touch() : Promise.resolve());
 
 // Runtime shape check (content scripts live in page renderers; never trust the payload's types). Being a mapped type
 // over Req['type'], it also stops compiling when a message is added without a validator.
@@ -51,12 +63,13 @@ const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = 
   unlock: (m) => isStr(m.password),
   lock: () => true,
   signOut: () => true,
-  refresh: () => true,
+  refresh: (m) => m.force === undefined || typeof m.force === 'boolean',
   openApp: () => true,
   matchesForUrl: (m) => isStr(m.url),
   search: (m) => isStr(m.query),
   fillRequest: (m) => isStr(m.id),
   totpFor: (m) => isStr(m.id),
+  revealPassword: (m) => isStr(m.id),
   savePending: (m) => isStr(m.url) && isStr(m.login) && isStr(m.password),
   getPending: () => true,
   discardPending: () => true,
@@ -89,6 +102,9 @@ export async function handle(req: Req, sender: chrome.runtime.MessageSender): Pr
   if (!origin) return fail(INVALID_ORIGIN);
   if (!isReq(req)) return fail(INVALID_MESSAGE);
   try {
+    // Request-time auto-lock: an idle vault is locked before anything is read, even if the alarm has not fired yet.
+    await checkAutoLock();
+    if (origin.kind === 'extension') await touch();
     return await route(req, origin);
   } catch (e) {
     return fail(errorMessage(e));
@@ -96,16 +112,6 @@ export async function handle(req: Req, sender: chrome.runtime.MessageSender): Pr
 }
 
 const currentState = async () => stateOf(await loadSession());
-
-/** http(s) origin of the configured server; plain http only for localhost (dev). */
-function serverOrigin(input: string): string {
-  let u: URL;
-  try { u = new URL(input.trim()); } catch { throw new ExtError('Endereço do servidor inválido.'); }
-  const local = u.hostname === 'localhost' || u.hostname === '127.0.0.1';
-  if (u.protocol !== 'https:' && !(u.protocol === 'http:' && local)) throw new ExtError('Use um endereço https:// (http:// só para localhost).');
-  if (u.username || u.password) throw new ExtError('Endereço do servidor inválido.');
-  return u.origin;
-}
 
 function genOptions(o: GenOptions): GenOptions {
   return { length: Number(o.length) || 20, upper: o.upper === true, lower: o.lower === true, digits: o.digits === true, symbols: o.symbols === true, excludeAmbiguous: o.excludeAmbiguous === true };
@@ -120,7 +126,7 @@ async function totpCode(uri: string): Promise<TotpCode> {
 
 async function route(req: Req, o: Origin): Promise<Res> {
   switch (req.type) {
-    // ---- state and account (no touch: polled by the popup, asked by every page load) ----
+    // ---- state and account ----
     case 'getState':
       return ok(await currentState());
     case 'setServer': {
@@ -134,7 +140,6 @@ async function route(req: Req, o: Origin): Promise<Res> {
     }
     case 'signIn': {
       extensionOnly(o);
-      await touch();
       const { serverUrl } = await loadSession();
       if (!serverUrl) throw new ExtError(NEEDS_SERVER);
       await signIn(serverUrl, req.email, req.password);
@@ -142,7 +147,6 @@ async function route(req: Req, o: Origin): Promise<Res> {
     }
     case 'unlock':
       extensionOnly(o);
-      await touch();
       await unlock(req.password);
       return ok(await currentState());
     case 'lock':
@@ -154,20 +158,17 @@ async function route(req: Req, o: Origin): Promise<Res> {
       return ok(await currentState());
     case 'refresh':
       extensionOnly(o);
-      await touch();
-      await loadVault(true);
+      await loadVault(req.force === true);
       return ok(await currentState());
     case 'openApp': {
-      await touch();
       const { serverUrl } = await loadSession();
       if (!serverUrl) throw new ExtError(NEEDS_SERVER);
       await chrome.tabs.create({ url: serverUrl + APP_VAULT_PATH });
       return ok(null);
     }
 
-    // ---- reading the vault (MatchItem only; no secrets) ----
+    // ---- reading the vault (MatchItem only; no secrets; a page's reads never extend the session) ----
     case 'matchesForUrl': {
-      await touch();
       const s = await requireUnlocked();
       // The popup asks for the active tab it looked up itself; a content script only ever gets its own page.
       if (o.kind === 'extension') return ok(matches(s.vault, req.url));
@@ -175,7 +176,6 @@ async function route(req: Req, o: Origin): Promise<Res> {
     }
     case 'search': {
       extensionOnly(o);
-      await touch();
       const s = await requireUnlocked();
       return ok(search(s.vault, req.query));
     }
@@ -183,32 +183,37 @@ async function route(req: Req, o: Origin): Promise<Res> {
     // ---- secrets, one record at a time, for the page they belong to ----
     case 'fillRequest': {
       if (o.kind !== 'page') throw new ExtError(INVALID_ORIGIN);
-      await touch();
       const r = findRecord((await requireUnlocked()).vault, req.id);
       recordFor(r, o);
+      await touchFromPage(o);
       return ok<Credentials>({ login: r.login, password: r.password });
     }
     case 'totpFor': {
-      await touch();
       const r = findRecord((await requireUnlocked()).vault, req.id);
       recordFor(r, o);
       if (!r.totp) throw new ExtError('Registro sem código 2FA');
+      await touchFromPage(o);
       return ok(await totpCode(r.totp));
+    }
+    case 'revealPassword': {
+      extensionOnly(o);
+      if (o.path !== POPUP_PATH) throw new ExtError(INVALID_ORIGIN);
+      const r = findRecord((await requireUnlocked()).vault, req.id);
+      return ok<RevealedPassword>({ password: r.password });
     }
     case 'fillFromPopup': {
       extensionOnly(o);
-      await touch();
       const r = findRecord((await requireUnlocked()).vault, req.id);
       let tab: chrome.tabs.Tab;
       try { tab = await chrome.tabs.get(req.tabId); } catch { throw new ExtError('Aba não encontrada'); }
       if (!tab.url || !urlsMatch(r.url, tab.url)) throw new ExtError(NOT_THIS_SITE);
-      const msg: FillIntoMsg = { type: 'fillInto', login: r.login, password: r.password };
-      // Top frame only: the URL just validated is the top frame's; iframes (ads, widgets) never receive credentials.
+      // No secret leaves here: the tab's top frame answers with fillRequest(id), validated against its real URL.
+      const msg: FillIntoMsg = { type: 'fillInto', id: r.id };
       try { await chrome.tabs.sendMessage(req.tabId, msg, { frameId: 0 }); } catch { throw new ExtError('Não foi possível preencher nesta página'); }
       return ok(null);
     }
 
-    // ---- captured credentials (Task 8 wires pending.ts here) ----
+    // ---- captured credentials (Task 8 wires pending.ts here; savePending touches once captured) ----
     case 'savePending':
     case 'getPending':
     case 'discardPending':
@@ -217,26 +222,25 @@ async function route(req: Req, o: Origin): Promise<Res> {
 
     // ---- writing ----
     case 'saveNew': {
-      await touch();
       await requireUnlocked();
       if (o.kind === 'page' && !allowedFor(req.url, o)) throw new ExtError(NOT_THIS_SITE);
+      await touchFromPage(o);
       const id = await saveNewRecord({ url: req.url, login: req.login, password: req.password, title: req.title });
       return ok({ id });
     }
     case 'updatePassword': {
-      await touch();
       const r = findRecord((await requireUnlocked()).vault, req.id);
       recordFor(r, o);
+      await touchFromPage(o);
       await updateRecordPassword(r.id, req.password);
       return ok(null);
     }
 
     // ---- utilities ----
     case 'generatePassword':
-      await touch();
+      await touchFromPage(o);
       return ok(generatePassword(genOptions(req.opts)));
     case 'openPopup': {
-      await touch();
       try {
         await chrome.action.openPopup(o.kind === 'page' && o.windowId !== undefined ? { windowId: o.windowId } : undefined);
         return ok<OpenPopupResult>({ opened: true });

@@ -10,8 +10,9 @@ import { emptyRecordData, touchPasswordDates, type RecordData } from '@app/recor
 import { decryptVault } from '@app/vault/decrypt';
 import { EMAIL_KEY, REFRESH_MIN_MS, SEARCH_LIMIT } from '@/shared/constants';
 import { hostOf, urlsMatch } from '@/shared/domain';
+import { ExtError } from '@/shared/errors';
 import type { MatchItem } from '@/shared/messages';
-import { ExtApi, ExtApiError, ExtError } from './api';
+import { ExtApi, ExtApiError } from './api';
 import {
   SIGNED_OUT, loadSession, requireUnlocked, saveSession, updateSession,
   type SessionData, type SessionSecrets, type VaultRecordLite,

@@ -2,8 +2,12 @@
 export const PENDING_TTL_MS = 5 * 60_000;
 /** Minimum time between two automatic vault downloads (popup opening); `refresh`, saves and unlocks bypass it. */
 export const REFRESH_MIN_MS = 30_000;
-/** chrome.storage.session key holding the whole SessionData object (secrets included; TRUSTED_CONTEXTS only). */
+/** chrome.storage.session key holding the SessionData core (token, user, keys, pending; TRUSTED_CONTEXTS only). */
 export const SESSION_KEY = 'nexus';
+/** chrome.storage.session key of the decrypted vault (own key: other session writes never rewrite it). */
+export const SESSION_VAULT_KEY = 'nexus.vault';
+/** chrome.storage.session key of lastActivity (own key: a touch is a single small write). */
+export const SESSION_ACTIVITY_KEY = 'nexus.lastActivity';
 /** chrome.storage.local: registrable domains the user chose "Nunca para este site" for (no secrets). */
 export const NEVER_KEY = 'neverHosts';
 /** chrome.storage.local: the last e-mail used to sign in (no secrets). */
