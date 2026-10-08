@@ -8,7 +8,7 @@ import { ApiClientError } from '@/lib/api/client';
 import { t } from '@/lib/i18n/pt-br';
 import { getRecordType, type RecordTypeId } from '@/lib/record-types/catalog';
 import type { AttachmentMeta } from '@/lib/record-types/record-data';
-import { createRecord, deleteAttachment, updateRecord } from '@/lib/vault/actions';
+import { addRecordToSharedFolder, createRecord, deleteAttachment, updateRecord } from '@/lib/vault/actions';
 import { dataForSave, firstInvalidKey, formReducer, initialFormState, isFormDirty, validateForm, type FormAction } from '@/lib/vault/record-form-state';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
@@ -26,10 +26,13 @@ const without = (e: Record<string, string>, key: string) => { const next = { ...
 
 /**
  * Create/edit dialog. New records start with the type picker (step 1); in edit mode the type is fixed.
+ * A new record goes into `folderId` (personal placement) or is linked into `sharedFolderId` right after it is created.
  * Closing a form with unsaved edits asks "Descartar alterações?" first; closing is refused while attachments are
  * being uploaded or deleted, and while saving.
  */
-export function RecordForm({ mode, record, folderId = null, onClose }: { mode: 'new' | 'edit'; record?: VaultRecord; folderId?: string | null; onClose: () => void }) {
+export function RecordForm({ mode, record, folderId = null, sharedFolderId = null, onClose }: {
+  mode: 'new' | 'edit'; record?: VaultRecord; folderId?: string | null; sharedFolderId?: string | null; onClose: () => void;
+}) {
   const editing = mode === 'edit' ? record : undefined;
   const [state, dispatchRaw] = useReducer(formReducer, undefined, () => initialFormState(editing?.data?.type ?? 'login', editing));
   const [initial] = useState(() => state.data);
@@ -95,8 +98,14 @@ export function RecordForm({ mode, record, folderId = null, onClose }: { mode: '
       } else {
         id = (await createRecord(data, folderId)).id;
       }
+      // The record exists from here on: a failed folder link is reported, not treated as a failed save.
+      let linkFailed = false;
+      if (!editing && sharedFolderId) {
+        try { await addRecordToSharedFolder(sharedFolderId, id); } catch { linkFailed = true; }
+      }
       setSelected(id);
       toast.success(t.recordSaved);
+      if (linkFailed) toast.error(t.recordNotLinkedToFolder);
       onClose();
     } catch (e) {
       toast.error(e instanceof ApiClientError ? e.message : t.genericSaveError);

@@ -45,8 +45,11 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
   const editingRecord = editing?.mode === 'edit' ? records.find((r) => r.id === editing.id) : undefined;
   // Live record as well: the move dialog's shared-folder checkboxes follow each add/remove.
   const movingRecord = movingId ? records.find((r) => r.id === movingId) : undefined;
-  // New records land in the personal folder being viewed; shared folders need an explicit "add to folder".
-  const newRecordFolderId = filter.kind === 'folder' && folders.some((f) => f.id === filter.folderId && f.kind === 'personal') ? filter.folderId : null;
+  // New records land in the folder being viewed: a personal folder through the record's own placement, a shared one
+  // through a folder link (the creator owns the record, so the API allows it). Viewers cannot add to a shared folder.
+  const newRecordFolderId = folder?.kind === 'personal' ? folder.id : null;
+  const newRecordSharedFolderId = folder?.kind === 'shared' ? folder.id : null;
+  const canCreate = filter.kind !== 'trash' && !(folder?.kind === 'shared' && folder.role === 'viewer');
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -64,7 +67,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
           <Input id="vault-search" data-testid="search" type="search" autoComplete="off" placeholder={t.search} value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
         </div>
-        {filter.kind !== 'trash' && (
+        {canCreate && (
           <Button data-testid="new-record" onClick={() => setEditing({ mode: 'new' })} aria-label={t.newRecord}>
             <Plus className="h-4 w-4" aria-hidden="true" />
             <span className="hidden sm:inline">{t.newRecord}</span>
@@ -114,7 +117,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
         </section>
       </div>
 
-      {editing?.mode === 'new' && <RecordForm key="new" mode="new" folderId={newRecordFolderId} onClose={() => setEditing(null)} />}
+      {editing?.mode === 'new' && <RecordForm key="new" mode="new" folderId={newRecordFolderId} sharedFolderId={newRecordSharedFolderId} onClose={() => setEditing(null)} />}
       {movingRecord && <MoveToFolderDialog open record={movingRecord} onClose={() => setMovingId(null)} />}
       {editing?.mode === 'edit' && editingRecord?.data && (
         <RecordForm key={editingRecord.id} mode="edit" record={editingRecord} onClose={() => setEditing(null)} />

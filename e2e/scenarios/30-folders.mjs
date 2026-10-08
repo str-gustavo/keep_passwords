@@ -138,6 +138,15 @@ export default async function run(ctx) {
   a.waitUrl(`/cofre/pasta/${sharedId}`);
   a.waitFor(tid(`record-row-${recordId}`));
 
+  // 7b. A record created from the shared folder page is linked into it and stays in view.
+  const wikiId = createLogin(a, ctx, { title: 'Wiki', login: 'ana.wiki', password: ctx.unique('Senha-Forte'), url: 'https://wiki.example.com' });
+  assert.ok(wikiId, 'Wiki id in ?r=');
+  a.waitTextIn(tid('toast'), 'Registro salvo');
+  assert.ok(a.evalJs(`!document.querySelector('[data-testid="toast"] .bg-danger')`), 'no error toast after creating in a shared folder');
+  assert.equal(new URL(a.url()).pathname, `/cofre/pasta/${sharedId}`);
+  a.waitFor(tid(`record-row-${wikiId}`));
+  a.waitUntil(`document.querySelectorAll('[data-testid^="record-row-"]').length === 2`, 15000, 'both records in the shared folder');
+
   // 8. B (reload: the vault is loaded at unlock) sees the folder and the record, and edits it.
   b.reload();
   unlock(b, master);
@@ -147,6 +156,7 @@ export default async function run(ctx) {
   b.waitUrl(`/cofre/pasta/${sharedId}`);
   b.waitUntil(headingIs('Equipe'), 15000, 'the shared folder in B');
   b.waitFor(tid(`record-row-${recordId}`));
+  b.waitFor(tid(`record-row-${wikiId}`));
   b.click(tid(`record-row-${recordId}`));
   b.waitUntil(detailIs('Intranet'), 15000, 'Intranet selected in B');
   b.waitText(`Compartilhado por ${emailA}`);
@@ -186,12 +196,32 @@ export default async function run(ctx) {
   a.waitHidden(tid(`share-folder-${sharedId}`));
   closeDialog(a);
   a.waitHidden(tid(`record-row-${recordId}`));
-  a.waitFor(tid('record-list-empty'));
+  a.waitFor(tid(`record-row-${wikiId}`));
+  assert.equal(a.count('[data-testid^="record-row-"]'), 1);
 
-  // B no longer has the record once its vault is loaded again.
+  // B no longer has the record once its vault is loaded again; "Wiki" is still shared through the folder.
   b.reload();
   unlock(b, master);
   b.waitUntil(headingIs('Equipe'), 15000, 'the shared folder in B after the unlink');
-  b.waitFor(tid('record-list-empty'));
-  assert.equal(b.count('[data-testid^="record-row-"]'), 0);
+  b.waitFor(tid(`record-row-${wikiId}`));
+  assert.equal(b.count('[data-testid^="record-row-"]'), 1);
+  assert.ok(b.isVisible(tid('new-record')), 'an editor can create records in the shared folder');
+
+  // 11. A makes B a viewer: B can no longer create records from the shared folder page (elsewhere it still can).
+  a.click(tid('folder-menu'));
+  a.waitFor(tid('folder-members'));
+  a.click(tid('folder-members'));
+  a.waitFor(tid(`member-role-${bId}`));
+  a.select(tid(`member-role-${bId}`), 'viewer');
+  a.waitTextIn(tid('toast'), 'Permissão atualizada');
+  closeDialog(a);
+
+  b.reload();
+  unlock(b, master);
+  b.waitUntil(headingIs('Equipe'), 15000, 'the shared folder in B as a viewer');
+  b.waitFor(tid(`record-row-${wikiId}`));
+  assert.ok(!b.isVisible(tid('new-record')), 'a viewer cannot create records in the shared folder');
+  b.click(tid('nav-all'));
+  b.waitUrl('/cofre');
+  b.waitFor(tid('new-record'));
 }

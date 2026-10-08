@@ -179,6 +179,7 @@ export const t = {
   currentFolder: 'Pasta atual',
   recordMoved: 'Registro movido',
   addedToFolder: (name: string) => `Registro adicionado a “${name}”`,
+  recordNotLinkedToFolder: 'Registro salvo, mas não foi possível adicioná-lo à pasta compartilhada. Use “Mover” para tentar de novo.',
   removedFromFolder: (name: string) => `Registro removido de “${name}”`,
   members: 'Membros',
   membersOf: (name: string) => `Membros de “${name}”`,
