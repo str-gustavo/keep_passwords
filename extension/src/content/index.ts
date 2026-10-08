@@ -1,3 +1,11 @@
-// Placeholder content script (Task 4 scaffold); the form detector and inline UI replace it.
-// Built as a classic-script IIFE (vite.content.config.ts): no import/export may survive bundling.
-export {};
+// Content script entry, injected into every frame (manifest content_scripts, run_at document_idle).
+// Built as a classic-script IIFE (vite.content.config.ts): no import/export survives bundling.
+import { startContentScript } from './controller';
+
+// Once per frame, even if the script is injected again into the same isolated world.
+const STARTED = '__nexusPasswordsContent';
+const scope = globalThis as unknown as Record<string, unknown>;
+if (!scope[STARTED]) {
+  scope[STARTED] = true;
+  startContentScript(document);
+}
