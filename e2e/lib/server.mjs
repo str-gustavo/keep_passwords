@@ -3,30 +3,47 @@ import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
-const bin = (name) => path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? `${name}.cmd` : name);
+const NEXT = path.join(process.cwd(), 'node_modules', 'next', 'dist', 'bin', 'next');
 
 export async function startServer({ port = 3100 } = {}) {
+  const baseUrl = `http://localhost:${port}`;
+  let inUse = false;
+  try { await fetch(baseUrl + '/'); inUse = true; } catch {}
+  if (inUse) throw new Error(`Porta ${port} já em uso — encerre o servidor antigo antes de rodar os testes`);
+
   if (!(process.env.E2E_SKIP_BUILD === '1' && existsSync('.next'))) {
-    const b = spawnSync(bin('next'), ['build'], { stdio: 'inherit', shell: process.platform === 'win32' });
+    const b = spawnSync(process.execPath, [NEXT, 'build'], { stdio: 'inherit' });
     if (b.status !== 0) throw new Error('next build failed');
   }
   const dir = mkdtempSync(path.join(tmpdir(), 'keep-e2e-'));
-  const child = spawn(bin('next'), ['start', '-p', String(port)], {
+  const child = spawn(process.execPath, [NEXT, 'start', '-p', String(port)], {
     env: { ...process.env, DATABASE_URL: '', PGLITE_DIR: dir, SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-123456', NODE_ENV: 'production' },
-    stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32',
+    stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32',
   });
   let exited = false;
-  child.on('exit', () => { exited = true; });
+  let exitInfo = '';
+  child.on('exit', (code, signal) => { exited = true; exitInfo = `code ${code}${signal ? `, signal ${signal}` : ''}`; });
   child.stdout.on('data', (d) => process.env.E2E_VERBOSE && process.stdout.write(d));
   child.stderr.on('data', (d) => process.stderr.write(d));
-  const stop = () => { if (!exited) child.kill(); };
-  const baseUrl = `http://localhost:${port}`;
+  const stop = () => {
+    if (exited) return;
+    try {
+      if (process.platform === 'win32') spawnSync('taskkill', ['/T', '/F', '/PID', String(child.pid)]);
+      else process.kill(-child.pid, 'SIGTERM');
+    } catch { try { child.kill(); } catch {} }
+  };
   const deadline = Date.now() + 60_000;
   let ready = false;
   while (Date.now() < deadline && !exited) {
-    try { const r = await fetch(baseUrl + '/entrar'); if (r.ok || r.status === 307) { ready = true; break; } } catch {}
+    let status = null;
+    try { status = (await fetch(baseUrl + '/entrar')).status; } catch {}
+    if (status !== null) {
+      if (status >= 500) { stop(); throw new Error(`server answered HTTP ${status} on /entrar`); }
+      ready = true; break;
+    }
     await new Promise((r) => setTimeout(r, 500));
   }
-  if (!ready) { stop(); throw new Error(`server did not become ready on ${baseUrl}`); }
+  if (exited) throw new Error(`next start exited with ${exitInfo} before becoming ready`);
+  if (!ready) { stop(); throw new Error(`server did not become ready on ${baseUrl} within 60s`); }
   return { baseUrl, stop };
 }

@@ -4,14 +4,18 @@ import assert from 'node:assert/strict';
 import { startServer } from './lib/server.mjs';
 import { browser, tid } from './lib/browser.mjs';
 
-const only = process.argv.includes('--only') ? process.argv[process.argv.indexOf('--only') + 1] : null;
+const onlyIdx = process.argv.indexOf('--only');
+const only = onlyIdx >= 0 ? process.argv[onlyIdx + 1] : null;
+if (onlyIdx >= 0 && (!only || only.startsWith('--'))) { console.error('--only requires a scenario name'); process.exit(2); }
 const dir = path.join(process.cwd(), 'e2e', 'scenarios');
 const files = readdirSync(dir).filter((f) => f.endsWith('.mjs') && (!only || f.includes(only))).sort();
 if (files.length === 0) { console.error(`no scenarios match${only ? ` "${only}"` : ''}`); process.exit(1); }
 
-const server = await startServer();
+let server = null;
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => { server?.stop(); process.exit(130); });
 let failed = 0;
 try {
+  server = await startServer();
   for (const f of files) {
     const t0 = Date.now();
     const sessions = [];
@@ -24,8 +28,11 @@ try {
     catch (e) { failed++; console.error(`FAIL ${f} (${Date.now() - t0} ms): ${e.stack || e}`); }
     finally { sessions.forEach((b) => b.close()); }
   }
+} catch (e) {
+  failed++;
+  console.error(`FAIL harness: ${e.stack || e}`);
 } finally {
-  server.stop();
+  server?.stop();
 }
 console.log(failed ? `${failed} scenario(s) failed` : 'all scenarios passed');
 process.exit(failed ? 1 : 0);

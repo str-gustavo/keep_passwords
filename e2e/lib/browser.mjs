@@ -2,7 +2,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import { mkdirSync } from 'node:fs';
 
-const AB = path.join(process.cwd(), 'node_modules', '.bin', process.platform === 'win32' ? 'agent-browser.cmd' : 'agent-browser');
+const AB = path.join(process.cwd(), 'node_modules', 'agent-browser', 'bin', 'agent-browser.js');
 export const tid = (id) => `[data-testid="${id}"]`;
 const headed = process.argv.includes('--headed');
 
@@ -11,7 +11,7 @@ const headed = process.argv.includes('--headed');
 export function browser(session) {
   const run = (args, timeout = 60_000) => {
     const all = ['--session', session, ...(headed ? ['--headed'] : []), ...args];
-    try { return execFileSync(AB, all, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout, shell: process.platform === 'win32' }).trim(); }
+    try { return execFileSync(process.execPath, [AB, ...all], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout }).trim(); }
     catch (e) { throw new Error(`agent-browser ${args.join(' ')} failed: ${e.stderr || e.stdout || e.message}`); }
   };
   mkdirSync('e2e/screenshots', { recursive: true });
