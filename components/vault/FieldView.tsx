@@ -20,7 +20,7 @@ export function FieldView({ label, value, kind, testKey }: { label: string; valu
 
   let content: React.ReactNode = masked && !revealed ? maskValue(value) : formatted;
   if (kind === 'totp') content = <TotpView key={value} uri={value} />;
-  else if (href) content = <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary underline-offset-2 hover:underline">{value}</a>;
+  else if (href) content = <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-text underline-offset-2 hover:underline">{value}</a>;
 
   return (
     <div className="flex items-start gap-3 border-b border-border py-3 last:border-b-0">

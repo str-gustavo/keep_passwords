@@ -8,7 +8,7 @@ import { cn } from '@/lib/ui/cn';
 export interface AuditRow { key: string; recordId: string; title: string; type: RecordTypeId; reason: string; strength: { score: number; label: string } }
 
 const pill = 'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium';
-const TONE = { bad: 'bg-danger/10 text-danger', fair: 'bg-primary-soft text-primary', good: 'bg-success/10 text-success' } as const;
+const TONE = { bad: 'bg-danger/10 text-danger', fair: 'bg-primary-soft text-primary-text', good: 'bg-success/10 text-success' } as const;
 const strengthTone = (score: number) => (score <= 1 ? TONE.bad : score >= 3 ? TONE.good : TONE.fair);
 
 export function AuditList({ id, testId, title, hint, icon: Icon, rows, onOpen }: { id: string; testId: string; title: string; hint: string; icon: LucideIcon; rows: AuditRow[]; onOpen: (recordId: string) => void }) {

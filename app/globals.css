@@ -7,6 +7,10 @@
   --color-primary-hover: #EA580C;
   --color-primary-active: #C2410C;
   --color-primary-soft: #FFEDD5;
+  /* Text on solid orange (AA: 6.2:1 on #F97316, 4.9:1 on hover #EA580C). */
+  --color-fg-on-primary: #1C1917;
+  /* Orange text on light surfaces (AA: 5.2:1 on #FFFFFF, 4.5:1 on primary-soft). */
+  --color-primary-text: #C2410C;
   --color-sidebar: #1C1917;
   --color-sidebar-fg: #FAFAF9;
   --color-surface: #FFFFFF;
@@ -25,6 +29,9 @@
   --color-fg: #FAFAF9;
   --color-fg-muted: #A8A29E;
   --color-primary-soft: #431407;
+  --color-fg-on-primary: #1C1917;
+  /* Orange text on dark surfaces (AA: 10.4:1 on #1C1917, 9.3:1 on primary-soft). */
+  --color-primary-text: #FDBA74;
 }
 
 @theme inline {
@@ -32,6 +39,8 @@
   --color-primary-hover: var(--color-primary-hover);
   --color-primary-active: var(--color-primary-active);
   --color-primary-soft: var(--color-primary-soft);
+  --color-fg-on-primary: var(--color-fg-on-primary);
+  --color-primary-text: var(--color-primary-text);
   --color-sidebar: var(--color-sidebar);
   --color-sidebar-fg: var(--color-sidebar-fg);
   --color-surface: var(--color-surface);

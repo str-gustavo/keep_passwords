@@ -43,8 +43,8 @@ function SignInForm() {
       description={t.signInSubtitle}
       footer={
         <>
-          <p><Link href="/recuperar" className="font-medium text-primary hover:text-primary-hover">{t.forgot}</Link></p>
-          <p>{t.noAccount} <Link href="/cadastro" className="font-medium text-primary hover:text-primary-hover">{t.signUp}</Link></p>
+          <p><Link href="/recuperar" className="font-medium text-primary-text underline-offset-2 hover:underline">{t.forgot}</Link></p>
+          <p>{t.noAccount} <Link href="/cadastro" className="font-medium text-primary-text underline-offset-2 hover:underline">{t.signUp}</Link></p>
         </>
       }
     >

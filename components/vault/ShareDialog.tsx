@@ -269,7 +269,7 @@ function ShareRow({ share: s, self, busy, manageable, editAllowed, onChange, onR
   const initial = (s.name.trim() || s.email).charAt(0).toUpperCase();
   return (
     <li data-testid={`share-row-${s.userId}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-3">
-      <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary">{initial}</span>
+      <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary-text">{initial}</span>
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-sm font-medium text-fg">
           <span className="truncate">{s.name.trim() || s.email}</span>

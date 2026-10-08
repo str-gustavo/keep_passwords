@@ -68,7 +68,7 @@ export default function SignUpPage() {
     <AuthCard
       title={t.signUpTitle}
       description={t.signUpSubtitle}
-      footer={<p>{t.haveAccount} <Link href="/entrar" className="font-medium text-primary hover:text-primary-hover">{t.signIn}</Link></p>}
+      footer={<p>{t.haveAccount} <Link href="/entrar" className="font-medium text-primary-text underline-offset-2 hover:underline">{t.signIn}</Link></p>}
     >
       <form onSubmit={onSubmit} noValidate className="space-y-4">
         <Field label={t.name} htmlFor="signup-name" error={errors.name}>

@@ -6,7 +6,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
     <main className="flex min-h-screen flex-col items-center justify-center bg-surface-2 px-4 py-10">
       <div className="w-full max-w-md">
         <div className="mb-6 flex flex-col items-center text-center">
-          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-white shadow-sm">
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary text-fg-on-primary shadow-sm">
             <KeyRound className="h-7 w-7" aria-hidden="true" />
           </div>
           <p className="mt-3 text-2xl font-bold tracking-tight text-fg">{t.appName}</p>

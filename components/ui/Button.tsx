@@ -3,7 +3,7 @@ import { cn } from '@/lib/ui/cn';
 import { Spinner } from './Spinner';
 type Props = React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'secondary' | 'ghost' | 'danger'; size?: 'sm' | 'md'; loading?: boolean };
 const V = {
-  primary: 'bg-primary text-white hover:bg-primary-hover active:bg-primary-active',
+  primary: 'bg-primary text-fg-on-primary hover:bg-primary-hover active:bg-primary-active',
   secondary: 'bg-surface border border-border text-fg hover:bg-surface-2',
   ghost: 'text-fg hover:bg-primary-soft',
   danger: 'bg-danger text-white hover:opacity-90',

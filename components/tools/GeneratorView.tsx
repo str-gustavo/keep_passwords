@@ -99,7 +99,7 @@ export function GeneratorView() {
             data-testid={`gen-mode-${m.id}`}
             aria-pressed={mode === m.id}
             onClick={() => setMode(m.id)}
-            className={cn('rounded-md px-4 py-1.5 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40', mode === m.id ? 'bg-primary text-white' : 'text-fg-muted hover:bg-primary-soft hover:text-fg')}
+            className={cn('rounded-md px-4 py-1.5 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40', mode === m.id ? 'bg-primary text-fg-on-primary' : 'text-fg-muted hover:bg-primary-soft hover:text-fg')}
           >
             {m.label}
           </button>

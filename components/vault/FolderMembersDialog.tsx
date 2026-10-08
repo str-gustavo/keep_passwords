@@ -140,7 +140,7 @@ export function FolderMembersDialog({ open, onClose, folder }: { open: boolean; 
                   const busy = busyUser === m.userId;
                   return (
                     <li key={m.userId} data-testid={`member-row-${m.userId}`} className="flex items-center gap-3 px-3 py-2.5">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary" aria-hidden="true">{initialsOf(m)}</span>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary-text" aria-hidden="true">{initialsOf(m)}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-fg">{m.name || m.email}{self && <span className="font-normal text-fg-muted"> ({t.you})</span>}</p>
                         <p className="truncate text-xs text-fg-muted" title={m.email}>{m.email}</p>
