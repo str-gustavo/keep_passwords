@@ -1,2 +1,11 @@
+node_modules
+.next
+.data
+.env
+.env.local
 .DS_Store
+e2e/screenshots
+*.tsbuildinfo
+next-env.d.ts
 *.md
+.superpowers/
