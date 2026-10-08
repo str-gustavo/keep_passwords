@@ -25,7 +25,10 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
 
   const heading = filter.kind === 'folder' ? folderNameOf(folders, filter.folderId) ?? title : title;
   const list = useMemo(() => filterRecords(records, filter, query, userId), [records, filter, query, userId]);
-  const selected = records.find((r) => r.id === selectedId) ?? null;
+  // Selection is scoped to the current filter (search ignored): a record that leaves the view, e.g. moved to the
+  // trash, stops showing in the detail pane and mobile falls back to the list.
+  const inScope = useMemo(() => filterRecords(records, filter, '', userId), [records, filter, userId]);
+  const selected = inScope.find((r) => r.id === selectedId) ?? null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">

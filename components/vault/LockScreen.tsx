@@ -24,7 +24,8 @@ export function LockScreen() {
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!password || busy) return;
+    if (busy) return;
+    if (!password) { setError(t.masterPasswordRequired); input.current?.focus(); return; }
     setBusy(true);
     setError(null);
     try { await unlockWithPassword(password); }

@@ -45,6 +45,8 @@ export const t = {
   unlockError: 'Não foi possível desbloquear. Tente novamente.',
   vaultLoadError: 'Erro ao carregar o cofre',
   retry: 'Tentar novamente',
+  offline: 'Sem conexão.',
+  masterPasswordRequired: 'Informe a senha mestra',
   newRecord: 'Novo registro',
   recordUnavailable: 'Registro indisponível',
   wrongMasterPassword: 'Senha mestra incorreta',
