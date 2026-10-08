@@ -22,8 +22,9 @@ export async function readSession(req: Request): Promise<{ userId: string; authV
   const cookie = req.headers.get('cookie') ?? '';
   const token = cookie.split(/;\s*/).find((c) => c.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
   if (!token) return null;
+  const key = secret();
   try {
-    const { payload } = await jwtVerify(token, secret());
+    const { payload } = await jwtVerify(token, key, { algorithms: ['HS256'] });
     if (!payload.sub || typeof payload.av !== 'number') return null;
     return { userId: payload.sub, authVersion: payload.av };
   } catch { return null; }

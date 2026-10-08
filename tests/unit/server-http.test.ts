@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { z } from 'zod';
 import { ApiError, handle, json, parseBody } from '@/server/http';
 import { hashSecret, verifySecret } from '@/server/auth/password';
@@ -18,8 +18,13 @@ describe('http helpers', () => {
     const r2 = await h2(new Request('http://x', { method: 'POST', body: '{"a":"no"}', headers: { 'content-type': 'application/json' } }), { params: Promise.resolve({}) });
     expect(r2.status).toBe(400);
     expect((await r2.json()).error.code).toBe('validation');
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const h3 = handle(async () => { throw new Error('boom'); });
-    expect((await h3(new Request('http://x'), { params: Promise.resolve({}) })).status).toBe(500);
+    const r3 = await h3(new Request('http://x'), { params: Promise.resolve({}) });
+    expect(r3.status).toBe(500);
+    expect(await r3.text()).not.toContain('boom');
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
   });
 });
 
