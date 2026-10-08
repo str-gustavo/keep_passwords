@@ -58,7 +58,8 @@ describe('auth', () => {
   it('locks the account after 5 failures with 423 and unlocks after the window', async () => {
     const s = await registerUser('a@b.c');
     const wrong = { email: 'a@b.c', authKey: s.material.recovery.recoveryAuthKey };
-    for (let i = 0; i < 5; i++) expect((await call(login, req('POST', '/api/auth/login', { body: wrong }))).status).toBe(401);
+    for (let i = 0; i < 4; i++) expect((await call(login, req('POST', '/api/auth/login', { body: wrong }))).status).toBe(401);
+    expect((await call(login, req('POST', '/api/auth/login', { body: wrong }))).status).toBe(423);
     const locked = await call(login, req('POST', '/api/auth/login', { body: wrong }));
     expect(locked.status).toBe(423);
     const authKey = await computeAuthKey('a@b.c', s.password, s.material.kdfSalt, 600_000);
@@ -66,6 +67,18 @@ describe('auth', () => {
     const db = await getDb();
     await db.update(schema.users).set({ lockedUntil: new Date(Date.now() - 1000) }).where(eq(schema.users.email, 'a@b.c'));
     expect((await call(login, req('POST', '/api/auth/login', { body: { email: 'a@b.c', authKey } }))).status).toBe(200);
+  });
+
+  it('lockout is atomic under concurrent wrong logins', async () => {
+    const s = await registerUser('a@b.c');
+    const wrong = { email: 'a@b.c', authKey: s.material.recovery.recoveryAuthKey };
+    await Promise.all(Array.from({ length: 10 }, () => call(login, req('POST', '/api/auth/login', { body: wrong }))));
+    const authKey = await computeAuthKey('a@b.c', s.password, s.material.kdfSalt, 600_000);
+    expect((await call(login, req('POST', '/api/auth/login', { body: { email: 'a@b.c', authKey } }))).status).toBe(423);
+    const db = await getDb();
+    const row = await db.query.users.findFirst({ where: eq(schema.users.email, 'a@b.c') });
+    expect(row!.failedAttempts).toBeGreaterThanOrEqual(5);
+    expect(row!.lockedUntil!.getTime()).toBeGreaterThan(Date.now());
   });
 
   it('logout clears the cookie and me requires a session', async () => {
@@ -94,6 +107,6 @@ describe('auth', () => {
     const fresh = cookieOf(r.setCookie);
     expect((await call(me, req('GET', '/api/auth/me', { cookie: fresh }))).status).toBe(200);
     const wrong = await call(changePassword, req('PUT', '/api/account/password', { cookie: fresh, body: { currentAuthKey: current, newAuthKey: n.authKey, kdfSalt: n.kdfSalt, kdfIterations: n.kdfIterations, encDataKey: n.encDataKey, recoveryAuthKey: rec.recoveryAuthKey, recoverySalt: rec.recoverySalt, encDataKeyRecovery: rec.encDataKeyRecovery } }));
-    expect(wrong.status).toBe(401);
+    expect(wrong.status).toBe(403);
   });
 });

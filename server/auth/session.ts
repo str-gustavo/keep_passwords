@@ -5,11 +5,12 @@ import { getDb, schema } from '@/server/db';
 
 export const COOKIE = 'keep_session';
 const MAX_AGE = 7 * 24 * 3600;
-const secret = () => {
+export const sessionSecret = (): string => {
   const s = process.env.SESSION_SECRET;
   if (!s || s.length < 32) throw new Error('SESSION_SECRET precisa ter pelo menos 32 caracteres');
-  return new TextEncoder().encode(s);
+  return s;
 };
+const secret = () => new TextEncoder().encode(sessionSecret());
 const attrs = () => `Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
 
 export async function createSessionCookie(userId: string, authVersion: number): Promise<string> {
