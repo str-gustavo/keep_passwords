@@ -6,7 +6,7 @@ export default defineConfig({
   css: { postcss: { plugins: [] } },
   test: {
     environment: 'jsdom',
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.ts', 'tests/**/*.test.tsx'],
     // Installs a fresh in-memory `chrome` mock (tests/helpers/chrome-mock.ts) for every test file.
     setupFiles: ['tests/setup.ts'],
   },
