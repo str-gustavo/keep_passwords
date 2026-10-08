@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { handle, json, parseBody } from '@/server/http';
-import { createSessionCookie } from '@/server/auth/session';
+import { createSessionCookie, createSessionToken } from '@/server/auth/session';
 import { toSessionUser } from '@/server/services/auth';
 import { completeRecovery } from '@/server/services/recovery';
 
@@ -14,5 +14,6 @@ const schema = z.object({
 export const POST = handle(async (req) => {
   const { token, ...input } = await parseBody(req, schema);
   const user = await completeRecovery(token, input);
-  return json({ user: toSessionUser(user) }, { headers: { 'set-cookie': await createSessionCookie(user.id, user.authVersion) } });
+  const wantsToken = req.headers.get('x-client') === 'extension';
+  return json({ user: toSessionUser(user), ...(wantsToken ? { token: await createSessionToken(user.id, user.authVersion) } : {}) }, { headers: { 'set-cookie': await createSessionCookie(user.id, user.authVersion) } });
 });

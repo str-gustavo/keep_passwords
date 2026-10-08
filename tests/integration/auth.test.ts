@@ -109,4 +109,28 @@ describe('auth', () => {
     const wrong = await call(changePassword, req('PUT', '/api/account/password', { cookie: fresh, body: { currentAuthKey: current, newAuthKey: n.authKey, kdfSalt: n.kdfSalt, kdfIterations: n.kdfIterations, encDataKey: n.encDataKey, recoveryAuthKey: rec.recoveryAuthKey, recoverySalt: rec.recoverySalt, encDataKeyRecovery: rec.encDataKeyRecovery } }));
     expect(wrong.status).toBe(403);
   });
+
+  it('returns a bearer token for extension clients and accepts it on /me', async () => {
+    const s = await registerUser('a@b.c');
+    const authKey = await computeAuthKey('a@b.c', s.password, s.material.kdfSalt, 600_000);
+    const r = await call(login, req('POST', '/api/auth/login', { body: { email: 'a@b.c', authKey }, headers: { 'x-client': 'extension' } }));
+    expect(r.status).toBe(200); expect(typeof r.data.token).toBe('string');
+    const m = await call(me, req('GET', '/api/auth/me', { headers: { authorization: `Bearer ${r.data.token}` } }));
+    expect(m.status).toBe(200);
+    const noToken = await call(login, req('POST', '/api/auth/login', { body: { email: 'a@b.c', authKey } }));
+    expect(noToken.data.token).toBeUndefined();
+  });
+
+  it('a bearer token from before a password change is rejected', async () => {
+    const s = await registerUser('a@b.c');
+    const current = await computeAuthKey('a@b.c', s.password, s.material.kdfSalt, 600_000);
+    const r = await call(login, req('POST', '/api/auth/login', { body: { email: 'a@b.c', authKey: current }, headers: { 'x-client': 'extension' } }));
+    const bearer = { authorization: `Bearer ${r.data.token}` };
+    expect((await call(me, req('GET', '/api/auth/me', { headers: bearer }))).status).toBe(200);
+    const n = await rewrapForNewPassword('a@b.c', 'outra senha 456', s.material.dataKey);
+    const rec = await createRecoveryMaterial(s.material.dataKey);
+    const c = await call(changePassword, req('PUT', '/api/account/password', { cookie: s.cookie, body: { currentAuthKey: current, newAuthKey: n.authKey, kdfSalt: n.kdfSalt, kdfIterations: n.kdfIterations, encDataKey: n.encDataKey, recoveryAuthKey: rec.recoveryAuthKey, recoverySalt: rec.recoverySalt, encDataKeyRecovery: rec.encDataKeyRecovery } }));
+    expect(c.status).toBe(200);
+    expect((await call(me, req('GET', '/api/auth/me', { headers: bearer }))).status).toBe(401);
+  });
 });

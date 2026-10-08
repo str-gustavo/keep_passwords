@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { handle, json, parseBody } from '@/server/http';
-import { createSessionCookie } from '@/server/auth/session';
+import { createSessionCookie, createSessionToken } from '@/server/auth/session';
 import { register, toSessionUser } from '@/server/services/auth';
 
 const b64 = z.string().regex(/^[A-Za-z0-9+/]+=*$/).min(1).max(20_000);
@@ -13,5 +13,6 @@ const registerSchema = z.object({
 export const POST = handle(async (req) => {
   const input = await parseBody(req, registerSchema);
   const user = await register(input);
-  return json({ user: toSessionUser(user) }, { status: 201, headers: { 'set-cookie': await createSessionCookie(user.id, user.authVersion) } });
+  const wantsToken = req.headers.get('x-client') === 'extension';
+  return json({ user: toSessionUser(user), ...(wantsToken ? { token: await createSessionToken(user.id, user.authVersion) } : {}) }, { status: 201, headers: { 'set-cookie': await createSessionCookie(user.id, user.authVersion) } });
 });

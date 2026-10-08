@@ -11,5 +11,5 @@ export interface SharesResponse { shares: ShareDto[]; folderLinks: FolderLinkDto
 export interface MemberDto { userId: string; email: string; name: string; role: FolderRole }
 
 export interface ApiErrorBody { error: { code: string; message: string } }
-export interface LoginResponse { user: SessionUser }
+export interface LoginResponse { user: SessionUser; token?: string }
 export interface PreloginResponse { kdfSalt: string; kdfIterations: number }

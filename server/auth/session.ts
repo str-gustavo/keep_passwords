@@ -13,15 +13,18 @@ export const sessionSecret = (): string => {
 const secret = () => new TextEncoder().encode(sessionSecret());
 const attrs = () => `Path=/; HttpOnly; SameSite=Lax; Max-Age=${MAX_AGE}${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
 
+export async function createSessionToken(userId: string, authVersion: number): Promise<string> {
+  return new SignJWT({ av: authVersion }).setProtectedHeader({ alg: 'HS256' }).setSubject(userId).setIssuedAt().setExpirationTime(`${MAX_AGE}s`).sign(secret());
+}
 export async function createSessionCookie(userId: string, authVersion: number): Promise<string> {
-  const jwt = await new SignJWT({ av: authVersion }).setProtectedHeader({ alg: 'HS256' }).setSubject(userId).setIssuedAt().setExpirationTime(`${MAX_AGE}s`).sign(secret());
-  return `${COOKIE}=${jwt}; ${attrs()}`;
+  return `${COOKIE}=${await createSessionToken(userId, authVersion)}; ${attrs()}`;
 }
 export const clearSessionCookie = () => `${COOKIE}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${process.env.NODE_ENV === 'production' ? '; Secure' : ''}`;
 
 export async function readSession(req: Request): Promise<{ userId: string; authVersion: number } | null> {
+  const bearer = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') ?? '')?.[1]?.trim();
   const cookie = req.headers.get('cookie') ?? '';
-  const token = cookie.split(/;\s*/).find((c) => c.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
+  const token = bearer ?? cookie.split(/;\s*/).find((c) => c.startsWith(`${COOKIE}=`))?.slice(COOKIE.length + 1);
   if (!token) return null;
   const key = secret();
   try {

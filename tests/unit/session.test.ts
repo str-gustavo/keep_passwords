@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
-import { createSessionCookie, clearSessionCookie, readSession, requireUser } from '@/server/auth/session';
+import { createSessionToken, createSessionCookie, clearSessionCookie, readSession, requireUser } from '@/server/auth/session';
 import { ApiError } from '@/server/http';
 import { getDb, schema } from '@/server/db';
 import { useFreshDb } from '../helpers/db';
@@ -30,6 +30,16 @@ describe('session', () => {
       expect(await createSessionCookie('11111111-1111-1111-1111-111111111111', 1)).toMatch(/; Secure$/);
       expect(clearSessionCookie()).toBe('keep_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Secure');
     } finally { env.NODE_ENV = prev; }
+  });
+});
+
+describe('bearer', () => {
+  it('reads a bearer token and prefers it over the cookie', async () => {
+    const token = await createSessionToken(ID, 2);
+    const other = (await createSessionCookie('22222222-2222-2222-2222-222222222222', 9)).split(';')[0]!;
+    expect(await readSession(new Request('http://x', { headers: { authorization: `Bearer ${token}` } }))).toEqual({ userId: ID, authVersion: 2 });
+    expect(await readSession(new Request('http://x', { headers: { authorization: `bearer ${token}`, cookie: other } }))).toEqual({ userId: ID, authVersion: 2 });
+    expect(await readSession(new Request('http://x', { headers: { authorization: 'Bearer nope' } }))).toBeNull();
   });
 });
 
