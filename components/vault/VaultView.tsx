@@ -1,7 +1,8 @@
 'use client';
 import { useMemo, useState } from 'react';
-import { ArrowLeft, Plus, RotateCw, Search } from 'lucide-react';
+import { ArrowLeft, MousePointerClick, Plus, RotateCw, Search } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { EmptyState } from '@/components/ui/EmptyState';
 import { Input } from '@/components/ui/Input';
 import { Spinner } from '@/components/ui/Spinner';
 import { t } from '@/lib/i18n/pt-br';
@@ -10,8 +11,14 @@ import { loadVault } from '@/lib/vault/actions';
 import { filterRecords, folderNameOf, type ListFilter } from '@/lib/vault/selectors';
 import { useVault } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
+import { RecordDetail } from './RecordDetail';
+import { RecordList } from './RecordList';
 
 export type VaultEditing = { mode: 'new' } | { mode: 'edit'; id: string } | null;
+
+// Task 27 (share dialog) and Task 26 (move-to-folder dialog) replace these.
+const openShareDialog = () => {};
+const openMoveDialog = () => {};
 
 export function VaultView({ filter, title }: { filter: ListFilter; title: string }) {
   const records = useVault((s) => s.records);
@@ -62,8 +69,7 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
       <div className="flex min-h-0 flex-1">
         {/* Below lg the list and the detail alternate: a selected record hides the list. */}
         <section aria-label={heading} className={cn('min-h-0 w-full flex-col border-r border-border bg-surface lg:flex lg:w-[380px] lg:shrink-0', selected ? 'hidden' : 'flex')}>
-          {/* Task 24: <RecordList records={list} selectedId={selectedId} onSelect={setSelected} /> */}
-          <div data-testid="record-list-placeholder" data-count={list.length} className="min-h-0 flex-1 overflow-y-auto" />
+          <RecordList records={list} selectedId={selected?.id ?? null} onSelect={setSelected} />
         </section>
         <section aria-label={t.recordDetails} className={cn('min-w-0 flex-1 flex-col lg:flex', selected ? 'flex' : 'hidden')}>
           {selected && (
@@ -73,8 +79,22 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
               </Button>
             </div>
           )}
-          {/* Task 24: <RecordDetail record={selected} onEdit={() => setEditing({ mode: 'edit', id: selected.id })} … /> */}
-          <div data-testid="record-detail-placeholder" data-record-id={selected?.id} className="min-h-0 flex-1 overflow-y-auto" />
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {selected ? (
+              <RecordDetail
+                key={selected.id}
+                record={selected}
+                onEdit={() => setEditing({ mode: 'edit', id: selected.id })}
+                onShare={openShareDialog}
+                onMove={openMoveDialog}
+                onDeselect={() => setSelected(null)}
+              />
+            ) : (
+              <div className="flex h-full items-center justify-center">
+                <EmptyState icon={<MousePointerClick aria-hidden="true" />} title={t.noSelection} description={t.noSelectionHint} />
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
