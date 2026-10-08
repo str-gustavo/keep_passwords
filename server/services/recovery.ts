@@ -3,7 +3,7 @@ import { and, eq, gt } from 'drizzle-orm';
 import { ApiError } from '@/server/http';
 import { getDb, schema } from '@/server/db';
 import { verifySecret } from '@/server/auth/password';
-import { applyNewCredentials, fakeSalt, normalizeEmail, type ChangePasswordInput } from './auth';
+import { DUMMY_HASH, applyNewCredentials, fakeSalt, normalizeEmail, type ChangePasswordInput } from './auth';
 
 export async function startRecovery(email: string) {
   const db = await getDb();
@@ -14,8 +14,10 @@ export async function startRecovery(email: string) {
 export async function verifyRecovery(email: string, recoveryAuthKey: string) {
   const db = await getDb();
   const u = await db.query.users.findFirst({ where: eq(schema.users.email, normalizeEmail(email)) });
+  if (!u) await verifySecret(recoveryAuthKey, DUMMY_HASH);
   if (!u || !(await verifySecret(recoveryAuthKey, u.recoveryAuthHash))) throw new ApiError(401, 'invalid_recovery', 'Frase de recuperação incorreta');
   const token = randomBytes(32).toString('base64url');
+  await db.delete(schema.recoveryTokens).where(eq(schema.recoveryTokens.userId, u.id));
   await db.insert(schema.recoveryTokens).values({ token, userId: u.id, expiresAt: new Date(Date.now() + 10 * 60_000) });
   return { token, encDataKeyRecovery: u.encDataKeyRecovery };
 }

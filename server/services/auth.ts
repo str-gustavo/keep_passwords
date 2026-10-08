@@ -9,6 +9,7 @@ import type { SessionUser } from '@/lib/api/types';
 
 export const normalizeEmail = (e: string) => e.trim().toLowerCase();
 const LOCK_MAX = 5;
+export const DUMMY_HASH = 'scrypt$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=';
 
 export function toSessionUser(u: schema.User): SessionUser {
   return { id: u.id, email: u.email, name: u.name, lockMinutes: u.lockMinutes, kdfSalt: u.kdfSalt, kdfIterations: u.kdfIterations, encDataKey: u.encDataKey, publicKey: u.publicKey, encPrivateKey: u.encPrivateKey };
@@ -77,7 +78,7 @@ const lockedError = (until: Date) => new ApiError(423, 'locked', `Conta bloquead
 export async function login(email: string, authKey: string): Promise<schema.User> {
   const db = await getDb();
   const u = await db.query.users.findFirst({ where: eq(schema.users.email, normalizeEmail(email)) });
-  if (!u) { await verifySecret(authKey, 'scrypt$AAAAAAAAAAAAAAAAAAAAAA==$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='); throw new ApiError(401, 'invalid_credentials', 'E-mail ou senha incorretos'); }
+  if (!u) { await verifySecret(authKey, DUMMY_HASH); throw new ApiError(401, 'invalid_credentials', 'E-mail ou senha incorretos'); }
   assertNotLocked(u);
   if (!(await verifySecret(authKey, u.authHash))) {
     const until = await registerFailure(db, u.id);
@@ -111,6 +112,7 @@ export async function applyNewCredentials(userId: string, i: Omit<ChangePassword
     authVersion: sql`${schema.users.authVersion} + 1`, failedAttempts: 0, firstFailedAt: null, lockedUntil: null, updatedAt: new Date(),
   }).where(where).returning();
   if (!user) throw new ApiError(409, 'conflict', 'A senha mestra foi alterada em outra sessão. Entre novamente.');
+  await db.delete(schema.recoveryTokens).where(eq(schema.recoveryTokens.userId, userId));
   return user;
 }
 

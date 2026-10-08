@@ -8,6 +8,8 @@ import { POST as login } from '@/app/api/auth/login/route';
 import { GET as me } from '@/app/api/auth/me/route';
 import { computeAuthKey, computeRecoveryAuthKey, createRecoveryMaterial, recoverDataKey, rewrapForNewPassword } from '@/lib/crypto/account';
 import { exportAesKey } from '@/lib/crypto/aes';
+import { eq } from 'drizzle-orm';
+import { getDb, schema } from '@/server/db';
 
 useFreshDb();
 
@@ -39,5 +41,43 @@ describe('recovery', () => {
     expect((await call(login, req('POST', '/api/auth/login', { body: { email: 'a@b.c', authKey } }))).status).toBe(200);
     const reuse = await call(complete, req('POST', '/api/auth/recovery/complete', { body }));
     expect(reuse.status).toBe(401);
+  });
+  async function verified(email: string, s: Awaited<ReturnType<typeof registerUser>>) {
+    const rak = s.material.recovery.recoveryAuthKey;
+    return call(verify, req('POST', '/api/auth/recovery/verify', { body: { email, recoveryAuthKey: rak } }));
+  }
+  async function completeBody(token: string, s: Awaited<ReturnType<typeof registerUser>>) {
+    const n = await rewrapForNewPassword(s.email, 'outra senha 456', s.material.dataKey);
+    const rec = await createRecoveryMaterial(s.material.dataKey);
+    return { token, newAuthKey: n.authKey, kdfSalt: n.kdfSalt, kdfIterations: n.kdfIterations, encDataKey: n.encDataKey, recoveryAuthKey: rec.recoveryAuthKey, recoverySalt: rec.recoverySalt, encDataKeyRecovery: rec.encDataKeyRecovery };
+  }
+
+  it('rejects verify for an unknown email', async () => {
+    const s = await registerUser('a@b.c');
+    const r = await call(verify, req('POST', '/api/auth/recovery/verify', { body: { email: 'no@b.c', recoveryAuthKey: s.material.recovery.recoveryAuthKey } }));
+    expect(r.status).toBe(401);
+    expect(r.data.error.code).toBe('invalid_recovery');
+  });
+
+  it('rejects an expired token', async () => {
+    const s = await registerUser('a@b.c');
+    const v = await verified('a@b.c', s);
+    expect(v.status).toBe(200);
+    const db = await getDb();
+    await db.update(schema.recoveryTokens).set({ expiresAt: new Date(Date.now() - 1000) }).where(eq(schema.recoveryTokens.token, v.data.token));
+    const c = await call(complete, req('POST', '/api/auth/recovery/complete', { body: await completeBody(v.data.token, s) }));
+    expect(c.status).toBe(401);
+    expect(c.data.error.code).toBe('invalid_token');
+  });
+
+  it('a second verify replaces the first token', async () => {
+    const s = await registerUser('a@b.c');
+    const v1 = await verified('a@b.c', s);
+    const v2 = await verified('a@b.c', s);
+    expect(v2.data.token).not.toBe(v1.data.token);
+    const c1 = await call(complete, req('POST', '/api/auth/recovery/complete', { body: await completeBody(v1.data.token, s) }));
+    expect(c1.status).toBe(401);
+    const c2 = await call(complete, req('POST', '/api/auth/recovery/complete', { body: await completeBody(v2.data.token, s) }));
+    expect(c2.status).toBe(200);
   });
 });
