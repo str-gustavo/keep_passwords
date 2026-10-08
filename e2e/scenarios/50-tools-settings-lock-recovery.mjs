@@ -27,10 +27,16 @@ export default async function run(ctx) {
   b.click(tid('nav-audit'));
   b.waitUrl('/cofre/auditoria');
   b.waitFor(tid('audit-score'));
+  const itemsExpr = (list) => `[...document.querySelectorAll('[data-testid="${list}"] [data-testid^="audit-item-"]')].map((el) => el.dataset.testid.replace('audit-item-', '')).sort()`;
+  const itemsOf = (list) => b.evalJs(itemsExpr(list));
+  const expected = [ids[0], ids[1]].sort();
+  // Wait for both lists to hold exactly the two weak/reused records before reading anything.
+  b.waitUntil(
+    ['audit-weak', 'audit-reused'].map((list) => `JSON.stringify(${itemsExpr(list)}) === ${JSON.stringify(JSON.stringify(expected))}`).join(' && '),
+    15000, 'the weak and reused audit lists',
+  );
   const score = Number(b.text(tid('audit-score')));
   assert.ok(Number.isInteger(score) && score < 100, `audit score ${score} < 100`);
-  const itemsOf = (list) => b.evalJs(`[...document.querySelectorAll('[data-testid="${list}"] [data-testid^="audit-item-"]')].map((el) => el.dataset.testid.replace('audit-item-', '')).sort()`);
-  const expected = [ids[0], ids[1]].sort();
   assert.deepEqual(itemsOf('audit-weak'), expected);
   assert.deepEqual(itemsOf('audit-reused'), expected);
   b.screenshot('50-audit');
@@ -85,11 +91,14 @@ export default async function run(ctx) {
   b.fill(tid('settings-new-password-confirm'), newMaster);
   b.scrollIntoView(tid('settings-change-password'));
   b.click(tid('settings-change-password'));
-  b.waitFor(tid('recovery-phrase'), 30000);
+  // The phrase dialog and the toast (4 s; behind the dialog but in the DOM) appear together: one wait for both.
+  b.waitUntil(
+    `!!document.querySelector('[data-testid="recovery-phrase"]')
+      && document.querySelector('[data-testid="toast"]').innerText.includes('Senha mestra alterada')`,
+    30000, 'the new recovery phrase and the "Senha mestra alterada" toast',
+  );
   const changedPhrase = phraseOf(b.text(tid('recovery-phrase')));
   assert.equal(changedPhrase.split(' ').length, 24);
-  // The toast (4 s) sits behind the phrase dialog but is already in the DOM.
-  b.waitTextIn(tid('toast'), 'Senha mestra alterada');
   b.screenshot('50-new-phrase');
   b.click(tid('recovery-ack'));
   b.click(tid('recovery-continue'));

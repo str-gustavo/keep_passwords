@@ -40,11 +40,15 @@ export default async function run(ctx) {
   b.click(tid('detail-edit'));
   b.waitFor(tid('record-save'));
   b.upload(tid('attachment-input'), filePath);
-  b.waitUntil(`!!document.querySelector('[data-testid^="form-attachment-delete-"]')`, 30000, 'the uploaded attachment in the form');
+  // Toasts last 4 s (and sit behind the modal, still in the DOM): the upload toast is part of the same wait as the
+  // uploaded row, so no other step runs between the upload finishing and the toast check.
+  b.waitUntil(
+    `!!document.querySelector('[data-testid^="form-attachment-delete-"]')
+      && document.querySelector('[data-testid="toast"]').innerText.includes(${JSON.stringify(`Anexo enviado: ${fileName}`)})`,
+    30000, 'the uploaded attachment in the form and its toast',
+  );
   const attachmentId = b.evalJs(`document.querySelector('[data-testid^="form-attachment-delete-"]').dataset.testid.replace('form-attachment-delete-', '')`);
   assert.ok(attachmentId);
-  // Toasts last 4 s and sit behind the modal: check the text now (it is in the DOM), not after closing the dialog.
-  b.waitTextIn(tid('toast'), `Anexo enviado: ${fileName}`);
   b.screenshot('40-attachment-form');
   b.scrollIntoView(tid('record-cancel'));
   b.click(tid('record-cancel'));
@@ -74,9 +78,9 @@ export default async function run(ctx) {
   b.click(tid(`attachment-delete-${attachmentId}`));
   b.waitFor(tid('attachment-delete-confirm'));
   b.click(tid('attachment-delete-confirm'));
+  b.waitTextIn(tid('toast'), 'Anexo excluído');
   b.waitHidden(tid('attachment-delete-confirm'));
   b.waitHidden(tid(`attachment-download-${attachmentId}`));
-  b.waitTextIn(tid('toast'), 'Anexo excluído');
 
   // 6. Import a Chrome CSV with three logins.
   const suffix = ctx.unique('csv');
@@ -97,8 +101,9 @@ export default async function run(ctx) {
   for (const r of rows) b.waitText(r.name);
   b.screenshot('40-import');
   b.click(tid('import-submit'));
-  b.waitUrl('/cofre', 30000);
-  b.waitTextIn(tid('toast'), '3 registros importados');
+  // The toast is shown when the last record is saved, right before the redirect: wait for it first.
+  b.waitTextIn(tid('toast'), '3 registros importados', 30000);
+  b.waitUrl('/cofre', 15000);
   const listHas = (title) => `[...document.querySelectorAll('[data-testid^="record-row-"]')].some((el) => el.innerText.includes(${JSON.stringify(title)}))`;
   for (const r of rows) b.waitUntil(listHas(r.name), 15000, `"${r.name}" in the vault list`);
   b.waitUntil(listHas('Documentos'), 15000, '"Documentos" in the vault list');
