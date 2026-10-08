@@ -4,8 +4,8 @@ import { getDb, schema } from '@/server/db';
 import { assertPermission, resolveAccess } from './access';
 
 export function assertBlob(value: string, field: string): void {
-  let bytes: Buffer;
-  try { bytes = Buffer.from(value, 'base64'); } catch { throw new ApiError(400, 'not_a_blob', `${field} não é um blob cifrado`); }
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value) || value.length % 4 !== 0) throw new ApiError(400, 'not_a_blob', `${field} não é um blob cifrado`);
+  const bytes = Buffer.from(value, 'base64');
   if (bytes.length < 1 + 12 + 16 || bytes[0] !== 0x01) throw new ApiError(400, 'not_a_blob', `${field} não é um blob cifrado`);
 }
 
@@ -63,6 +63,7 @@ export async function setRecordMeta(userId: string, id: string, m: { favorite?: 
   assertPermission(a, 'view');
   if (m.folderId) await assertOwnPersonalFolder(userId, m.folderId);
   const patch = { ...(m.favorite !== undefined ? { favorite: m.favorite } : {}), ...(m.folderId !== undefined ? { folderId: m.folderId } : {}) };
+  if (Object.keys(patch).length === 0) return;
   if (a.direct) {
     await db.update(schema.recordKeys).set(patch).where(and(eq(schema.recordKeys.recordId, id), eq(schema.recordKeys.userId, userId)));
   } else {
