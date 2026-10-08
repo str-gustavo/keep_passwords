@@ -44,6 +44,20 @@ describe('aes', () => {
     await expect(decryptBytes(k1, new Uint8Array([0x02, 1, 2, 3]))).rejects.toBeInstanceOf(DecryptError);
   });
 
+  it('throws DecryptError for an unknown version byte on a real blob', async () => {
+    const key = await generateAesKey();
+    const bytes = fromBase64(await encryptString(key, 'secret'));
+    bytes[0] = 0x02;
+    await expect(decryptBytes(key, bytes)).rejects.toBeInstanceOf(DecryptError);
+  });
+
+  it('throws DecryptError for malformed base64', async () => {
+    const key = await generateAesKey();
+    await expect(decryptString(key, '%%%not-base64%%%')).rejects.toBeInstanceOf(DecryptError);
+    await expect(decryptJson(key, '%%%not-base64%%%')).rejects.toBeInstanceOf(DecryptError);
+    await expect(unwrapAesKey(key, '%%%not-base64%%%')).rejects.toBeInstanceOf(DecryptError);
+  });
+
   it('wraps and unwraps keys, exported raw bytes match', async () => {
     const wrapping = await generateAesKey();
     const inner = await generateAesKey();
