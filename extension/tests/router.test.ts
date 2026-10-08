@@ -38,7 +38,7 @@ describe('fillRequest', () => {
     const sender = { id: MOCK_EXTENSION_ID, tab: { id: 7, url: 'https://evil.com/login' } } as chrome.runtime.MessageSender;
     await expect(handle({ type: 'fillRequest', id: '1' }, sender)).resolves.toEqual({ ok: false, error: 'Registro não corresponde a este site' });
     const ok = await handle({ type: 'fillRequest', id: '1' }, { id: MOCK_EXTENSION_ID, tab: { id: 7, url: 'https://github.com/login' } } as never);
-    expect(ok).toEqual({ ok: true, data: { login: 'ana', password: 'pw' } });
+    expect(ok).toEqual({ ok: true, data: { login: 'ana', password: 'pw', hasTotp: false } });
   });
 
   it('fillRequest refuses senders without a tab (not a content script of a page)', async () => {

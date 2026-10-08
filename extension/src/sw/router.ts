@@ -228,7 +228,7 @@ async function route(req: Req, o: Origin): Promise<Res> {
       const r = findRecord((await requireUnlocked()).vault, req.id);
       recordFor(r, o);
       await touchFromPage(o);
-      return ok<Credentials>({ login: r.login, password: r.password });
+      return ok<Credentials>({ login: r.login, password: r.password, hasTotp: r.totp !== '' });
     }
     case 'totpFor': {
       const r = findRecord((await requireUnlocked()).vault, req.id);

@@ -33,7 +33,7 @@ export interface Pending { url: string; host: string; login: string; password: s
 export interface PendingSummary { kind: 'new' | 'update'; login: string; host: string; title: string; existingId: string | null; existingTitle: string | null; locked: boolean }
 
 /** `fillRequest` answer: the one record the user picked, for the page it was checked against. */
-export interface Credentials { login: string; password: string }
+export interface Credentials { login: string; password: string; hasTotp: boolean }
 /** `revealPassword` answer (popup only). */
 export interface RevealedPassword { password: string }
 /** `totpFor` answer. */
