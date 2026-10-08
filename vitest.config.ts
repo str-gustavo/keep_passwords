@@ -11,4 +11,6 @@ export default defineConfig({
     fileParallelism: true,
   },
   resolve: { alias: { '@': path.resolve(__dirname, '.') } },
+  // tsconfig uses jsx: preserve (Next compiles it); tests that render components need the automatic runtime.
+  esbuild: { jsx: 'automatic' },
 });

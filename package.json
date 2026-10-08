@@ -14,7 +14,8 @@
     "e2e:install": "agent-browser install",
     "check": "npm run typecheck && npm run lint && npm run test",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "tsx scripts/migrate.ts"
+    "db:migrate": "tsx scripts/migrate.ts",
+    "icons": "node scripts/build-icons.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
@@ -32,6 +33,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "@tailwindcss/postcss": "^4.3.3",
     "@types/node": "^22",
     "@types/pg": "^8.15.5",
@@ -41,6 +43,7 @@
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",
     "eslint-config-next": "^15.5.27",
+    "png-to-ico": "^3.0.2",
     "tailwindcss": "^4.3.3",
     "tsx": "^4.20.0",
     "typescript": "^5.9.0",

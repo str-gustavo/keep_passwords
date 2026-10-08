@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="nexus-lock-shackle" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#5A9CC6"/>
+      <stop offset="1" stop-color="#2F78A4"/>
+    </linearGradient>
+    <linearGradient id="nexus-lock-body" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22729F"/>
+      <stop offset="1" stop-color="#125375"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="#0D2A4D"/>
+  <path d="M41 58V42a23 23 0 0 1 46 0v16" fill="none" stroke="url(#nexus-lock-shackle)" stroke-width="12" stroke-linecap="round"/>
+  <rect x="20" y="52" width="88" height="62" rx="14" fill="url(#nexus-lock-body)"/>
+  <g transform="translate(36 55) scale(0.56)" fill="#FA681F">
+    <path d="M5.6 9H28.6L53.1 41.3C55.2 44.1 56.6 46.8 56.6 50C56.6 53.2 55.2 55.9 53.1 58.7L28.6 91H5.6L37.2 50Z"/>
+    <path d="M51.9 31.5L69.9 9H94.4L64.1 48.8L59.7 43L79.9 16.5L72.2 16.5L56 36.8Z"/>
+    <path d="M51.9 68.5L69.9 91H94.4L64.1 51.2L59.7 57L79.9 83.5L72.2 83.5L56 63.2Z"/>
+  </g>
+</svg>
