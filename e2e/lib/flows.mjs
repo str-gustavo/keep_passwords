@@ -48,6 +48,25 @@ export function unlock(b, password) {
   b.waitHidden(tid('lock-password'), 30000);
 }
 
+// Closes the one open dialog with its X ("Fechar") button: `press Escape` does not close native <dialog>s in
+// agent-browser.
+export function closeDialog(b) {
+  const x = 'dialog[open] button[aria-label="Fechar"]';
+  b.scrollIntoView(x);
+  b.click(x);
+  b.waitUntil(`!document.querySelector('dialog[open]')`, 15000, 'the dialog to close');
+}
+
+// The test id suffix (a user id) of the first element, in document order, whose test id starts with `prefix` and
+// whose text contains `text`. User ids are not shown in the UI, so the scenarios read them from share/member rows (a
+// row comes before the controls inside it, e.g. `share-row-<id>` before `share-row-permission-<id>`).
+export function idFromTestId(b, prefix, text) {
+  return b.evalJs(`(() => {
+    const el = [...document.querySelectorAll('[data-testid^=${JSON.stringify(prefix)}]')].find((e) => e.innerText.includes(${JSON.stringify(text)}));
+    return el ? el.dataset.testid.slice(${prefix.length}) : null;
+  })()`);
+}
+
 // Downloads (attachments, export) go through a blob URL and a click on an <a download>, which the CLI cannot
 // observe. This page-side stub records each download's file name and blob instead of saving it; read them back with
 // `lastDownload`. Client-side navigation keeps it installed; a full page load removes it.
