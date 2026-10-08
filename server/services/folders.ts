@@ -108,15 +108,23 @@ export async function addFolderRecord(userId: string, id: string, i: { recordId:
   if (folder.kind !== 'shared') throw new ApiError(400, 'validation', 'Use /records/:id/meta para pastas pessoais');
   requireRole(role, 'editor');
   const a = await resolveAccess(db, userId, i.recordId);
-  assertPermission(a, 'edit');
-  if (!a.canShare) throw new ApiError(403, 'forbidden', 'Você não pode compartilhar este registro');
+  assertPermission(a, 'view');
+  // Owner-only: a delegate's link would outlive the owner revoking the delegate's direct share.
+  if (a.record.ownerId !== userId) throw new ApiError(403, 'forbidden', 'Somente o dono pode colocar o registro em uma pasta compartilhada');
   if (await db.query.folderRecords.findFirst({ where: and(eq(schema.folderRecords.folderId, id), eq(schema.folderRecords.recordId, i.recordId)) })) throw new ApiError(409, 'already_in_folder', 'Registro já está na pasta');
   await db.insert(schema.folderRecords).values({ folderId: id, recordId: i.recordId, encKey: i.encKey });
 }
 
+/** Folder editors may unlink any record; the record's owner may unlink it from any folder, member or not. */
 export async function removeFolderRecord(userId: string, id: string, recordId: string) {
-  const { db, role } = await folderRole(userId, id);
-  requireRole(role, 'editor');
+  const db = await getDb();
+  const record = await db.query.records.findFirst({ where: eq(schema.records.id, recordId), columns: { ownerId: true } });
+  if (record?.ownerId === userId) {
+    if (!(await db.query.folders.findFirst({ where: and(eq(schema.folders.id, id), eq(schema.folders.kind, 'shared')), columns: { id: true } }))) throw new ApiError(404, 'folder_not_found', 'Pasta não encontrada');
+  } else {
+    const { role } = await folderRole(userId, id);
+    requireRole(role, 'editor');
+  }
   const res = await db.delete(schema.folderRecords).where(and(eq(schema.folderRecords.folderId, id), eq(schema.folderRecords.recordId, recordId))).returning();
   if (res.length === 0) throw new ApiError(404, 'not_found', 'Registro não está na pasta');
 }

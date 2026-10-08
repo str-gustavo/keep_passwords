@@ -13,6 +13,7 @@ import { POST as createRecord } from '@/app/api/records/route';
 import { PUT as updateRecord } from '@/app/api/records/[id]/route';
 import { PUT as meta } from '@/app/api/records/[id]/meta/route';
 import { GET as vault } from '@/app/api/vault/route';
+import { GET as listShares } from '@/app/api/records/[id]/shares/route';
 import { encryptJson, encryptString, generateAesKey, wrapAesKey } from '@/lib/crypto/aes';
 import { importPublicKey, rsaWrapAesKey } from '@/lib/crypto/rsa';
 import { emptyRecordData } from '@/lib/record-types/record-data';
@@ -153,7 +154,7 @@ describe('folder edge cases', () => {
     expect((await call(createFolder, req('POST', '/api/folders', { cookie: a.cookie, body: { kind: 'personal', encName: await encryptString(a.material.dataKey, 'Y'), parentId: pf.data.folder.id } }))).status).toBe(404);
   });
 
-  it('linking requires edit and canShare on the record', async () => {
+  it('only the record owner can link it into a shared folder, whatever the delegate\'s access', async () => {
     const { a, c, folderKey, fid, add } = await setup();
     expect((await add(c, 'editor')()).status).toBe(201);
     const { id: rid, key } = await record(a.cookie, a.material.dataKey);
@@ -163,12 +164,45 @@ describe('folder edge cases', () => {
       await db.delete(schema.recordKeys).where(and(eq(schema.recordKeys.recordId, rid), eq(schema.recordKeys.userId, c.userId)));
       await db.insert(schema.recordKeys).values({ recordId: rid, userId: c.userId, encKey: linkKey, keyType: 'rsa', permission, canShare });
     };
-    const link = () => call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: c.cookie, body: { recordId: rid, encKey: linkKey } }), { id: fid });
-    await grant('view', true);
-    expect((await link()).status).toBe(403);
-    await grant('edit', false);
-    expect((await link()).status).toBe(403);
-    await grant('edit', true);
-    expect((await link()).status).toBe(201);
+    const link = (u: typeof c) => call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: u.cookie, body: { recordId: rid, encKey: linkKey } }), { id: fid });
+    for (const [permission, canShare] of [['view', true], ['edit', false], ['edit', true]] as const) {
+      await grant(permission, canShare);
+      const r = await link(c);
+      expect(r.status).toBe(403);
+      expect(r.data.error.message).toBe('Somente o dono pode colocar o registro em uma pasta compartilhada');
+    }
+    expect((await link(a)).status).toBe(201);
+  });
+
+  it('the owner unlinks the record from a folder they no longer belong to; its members lose access', async () => {
+    const a = await registerUser('a@b.c');
+    const b = await registerUser('b@b.c');
+    const c = await registerUser('c@b.c');
+    const d = await registerUser('d@b.c');
+    // B's shared folder, with A as editor and C as viewer.
+    const folderKey = await generateAesKey();
+    const f = await call(createFolder, req('POST', '/api/folders', { cookie: b.cookie, body: { kind: 'shared', encName: await encryptString(folderKey, 'Eq'), encKey: await wrapAesKey(b.material.dataKey, folderKey) } }));
+    const fid = f.data.folder.id as string;
+    for (const [u, role] of [[a, 'editor'], [c, 'viewer']] as const) {
+      const encKey = await rsaWrapAesKey(await importPublicKey(u.material.publicKey), folderKey);
+      expect((await call(addMember, req('POST', `/api/folders/${fid}/members`, { cookie: b.cookie, body: { userId: u.userId, encKey, role } }), { id: fid })).status).toBe(201);
+    }
+    const { id: rid, key } = await record(a.cookie, a.material.dataKey);
+    expect((await call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: a.cookie, body: { recordId: rid, encKey: await wrapAesKey(folderKey, key) } }), { id: fid })).status).toBe(201);
+    // B removes A from the folder: the link stays and C still sees A's record.
+    expect((await call(removeMember, req('DELETE', `/api/folders/${fid}/members/${a.userId}`, { cookie: b.cookie }), { id: fid, userId: a.userId })).status).toBe(200);
+    expect((await call(vault, req('GET', '/api/vault', { cookie: c.cookie }))).data.records.map((r: { id: string }) => r.id)).toEqual([rid]);
+    const shares = await call(listShares, req('GET', `/api/records/${rid}/shares`, { cookie: a.cookie }), { id: rid });
+    expect(shares.data).toEqual({ shares: [], folderLinks: [{ folderId: fid, folderOwnerEmail: 'b@b.c' }] });
+
+    const unlink = (u: typeof a) => call(removeFolderRecord, req('DELETE', `/api/folders/${fid}/records/${rid}`, { cookie: u.cookie }), { id: fid, recordId: rid });
+    expect((await unlink(d)).status).toBe(404); // neither owner nor member
+    expect((await unlink(a)).status).toBe(200);
+    expect((await unlink(a)).status).toBe(404);
+    expect((await call(vault, req('GET', '/api/vault', { cookie: c.cookie }))).data.records).toHaveLength(0);
+    expect((await call(listShares, req('GET', `/api/records/${rid}/shares`, { cookie: a.cookie }), { id: rid })).data.folderLinks).toEqual([]);
+    // Unknown folder for the owner: 404.
+    const ghost = crypto.randomUUID();
+    expect((await call(removeFolderRecord, req('DELETE', `/api/folders/${ghost}/records/${rid}`, { cookie: a.cookie }), { id: ghost, recordId: rid })).status).toBe(404);
   });
 });

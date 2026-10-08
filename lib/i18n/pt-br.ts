@@ -355,4 +355,9 @@ export const t = {
   shareLeaveTitle: 'Sair do compartilhamento?',
   shareLeaveText: 'Você perderá o acesso a este registro. Para recuperá-lo, alguém precisará compartilhá-lo novamente.',
   shareLeft: 'Você saiu do compartilhamento',
+  shareFoldersHint: 'Os membros destas pastas também acessam este registro.',
+  shareFolderLink: (email: string) => `Pasta compartilhada de ${email}`,
+  shareFolderRemoveLabel: (email: string) => `Remover da pasta compartilhada de ${email}`,
+  shareFolderRemove: 'Remover da pasta',
+  shareFolderRemoved: 'Registro removido da pasta compartilhada',
 } as const;

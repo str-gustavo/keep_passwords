@@ -1,7 +1,7 @@
-import { and, eq, ne } from 'drizzle-orm';
+import { and, asc, eq, ne } from 'drizzle-orm';
 import { ApiError } from '@/server/http';
 import { getDb, schema, type Db } from '@/server/db';
-import type { Permission, ShareDto } from '@/lib/api/types';
+import type { Permission, SharesResponse } from '@/lib/api/types';
 import { RANK, resolveAccess, type RecordAccess } from './access';
 
 const noEscalation = () => new ApiError(403, 'forbidden', 'Você não pode conceder mais acesso do que possui');
@@ -25,11 +25,20 @@ async function requireShareRight(userId: string, recordId: string) {
   return { db, a };
 }
 
-export async function listShares(userId: string, recordId: string): Promise<ShareDto[]> {
+/** Direct shares plus every shared folder the record is linked into (folder names are encrypted: only the owner's e-mail). */
+export async function listShares(userId: string, recordId: string): Promise<SharesResponse> {
   const { db, a } = await requireShareRight(userId, recordId);
   const rows = await db.select({ k: schema.recordKeys, u: schema.users }).from(schema.recordKeys).innerJoin(schema.users, eq(schema.users.id, schema.recordKeys.userId))
     .where(and(eq(schema.recordKeys.recordId, recordId), ne(schema.recordKeys.userId, a.record.ownerId)));
-  return rows.map(({ k, u }) => ({ userId: u.id, email: u.email, name: u.name, permission: k.permission as Permission, canShare: k.canShare }));
+  const links = await db.select({ folderId: schema.folderRecords.folderId, folderOwnerEmail: schema.users.email }).from(schema.folderRecords)
+    .innerJoin(schema.folders, eq(schema.folders.id, schema.folderRecords.folderId))
+    .innerJoin(schema.users, eq(schema.users.id, schema.folders.ownerId))
+    .where(eq(schema.folderRecords.recordId, recordId))
+    .orderBy(asc(schema.folderRecords.createdAt));
+  return {
+    shares: rows.map(({ k, u }) => ({ userId: u.id, email: u.email, name: u.name, permission: k.permission as Permission, canShare: k.canShare })),
+    folderLinks: links,
+  };
 }
 
 export async function addShare(userId: string, recordId: string, i: { userId: string; encKey: string; permission: 'view' | 'edit'; canShare: boolean }) {

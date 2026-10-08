@@ -22,12 +22,16 @@ export const canManageMembers = (role: FolderRole) => RANK[role] >= RANK.admin;
 export const sharedFolderTargets = (folders: VaultFolder[]) =>
   folders.filter((f) => f.kind === 'shared' && f.role !== 'viewer').sort((a, b) => collator.compare(a.name, b.name));
 
-/** Adding a record to a shared folder needs its key, edit access and the right to share it (API 403 otherwise). */
-export const canShareIntoFolders = (record: VaultRecord) =>
-  record.key !== null && record.data !== null && record.access.canShare && record.access.permission !== 'view';
+/**
+ * Only the record's owner links it into shared folders (API 403 otherwise), so revoking a delegate's direct share
+ * never leaves a link the owner cannot see; the record key is needed to wrap it with the folder key.
+ */
+export const canShareIntoFolders = (record: VaultRecord, userId: string) =>
+  record.ownerId === userId && record.key !== null && record.data !== null;
 
-/** "Mover" is offered when the record can go to one of the caller's folders or into a shared folder. */
-export const canMoveRecord = (record: VaultRecord) => record.deletedAt === null && (record.hasDirectKey || canShareIntoFolders(record));
+/** "Mover" is offered when the record can go to one of the caller's folders or (owner) into a shared folder. */
+export const canMoveRecord = (record: VaultRecord, userId: string) =>
+  record.deletedAt === null && (record.hasDirectKey || canShareIntoFolders(record, userId));
 
 /** Owner first, then by role (admin → viewer), then by name or e-mail. */
 export const sortMembers = (members: MemberDto[]) =>

@@ -6,6 +6,8 @@ export interface VaultFolderDto { id: string; kind: 'personal' | 'shared'; encNa
 export interface VaultResponse { records: VaultRecordDto[]; folders: VaultFolderDto[] }
 export interface SessionUser { id: string; email: string; name: string; lockMinutes: number; kdfSalt: string; kdfIterations: number; encDataKey: string; publicKey: string; encPrivateKey: string }
 export interface ShareDto { userId: string; email: string; name: string; permission: Permission; canShare: boolean }
+export interface FolderLinkDto { folderId: string; folderOwnerEmail: string }
+export interface SharesResponse { shares: ShareDto[]; folderLinks: FolderLinkDto[] }
 export interface MemberDto { userId: string; email: string; name: string; role: FolderRole }
 
 export interface ApiErrorBody { error: { code: string; message: string } }

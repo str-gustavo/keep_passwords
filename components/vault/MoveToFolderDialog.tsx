@@ -17,15 +17,18 @@ const sectionTitle = 'mb-2 text-xs font-semibold uppercase tracking-wide text-fg
 
 /**
  * Personal placement (one folder or none) applies to the caller's own copy of the record, so it is offered only
- * with a direct key. Shared folders are a membership list: each checkbox adds or removes the record right away.
+ * with a direct key. Shared folders are a membership list, shown to the record's owner only (the API refuses links
+ * by anyone else): each checkbox adds or removes the record right away.
  * Pass the live record from the store so the checkboxes follow each change.
  */
 export function MoveToFolderDialog({ open, onClose, record }: { open: boolean; onClose: () => void; record: VaultRecord }) {
   const folders = useVault((s) => s.folders);
+  const userId = useVault((s) => s.user?.id ?? '');
   const tree = useMemo(() => folderTree(folders), [folders]);
   const shared = useMemo(() => sharedFolderTargets(folders), [folders]);
   const [busy, setBusy] = useState<string | null>(null);
-  const canAddShared = canShareIntoFolders(record);
+  const isOwner = record.ownerId === userId;
+  const canAddShared = canShareIntoFolders(record, userId);
   const current = record.access.folderId;
 
   async function place(folderId: string | null) {
@@ -81,7 +84,7 @@ export function MoveToFolderDialog({ open, onClose, record }: { open: boolean; o
           </section>
         )}
 
-        <section aria-labelledby="move-shared-title" className="space-y-2">
+        {isOwner && <section aria-labelledby="move-shared-title" className="space-y-2">
           <h3 id="move-shared-title" className={sectionTitle}>{t.sharedFolders}</h3>
           {shared.length === 0 ? (
             <p className="text-sm text-fg-muted">{t.moveNoSharedFolders}</p>
@@ -91,7 +94,7 @@ export function MoveToFolderDialog({ open, onClose, record }: { open: boolean; o
               <ul className="space-y-0.5">
                 {shared.map((f) => {
                   const checked = record.sharedFolderIds.includes(f.id);
-                  // Removing only needs editor rights on the folder; adding also needs the right to share the record.
+                  // Removing works whenever the record is in the folder; adding also needs the record key.
                   const disabled = busy !== null || (!checked && !canAddShared);
                   const inputId = `move-shared-input-${f.id}`;
                   return (
@@ -112,7 +115,7 @@ export function MoveToFolderDialog({ open, onClose, record }: { open: boolean; o
               </ul>
             </>
           )}
-        </section>
+        </section>}
       </div>
     </Dialog>
   );

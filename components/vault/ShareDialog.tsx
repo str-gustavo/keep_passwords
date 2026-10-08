@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { LogOut, RotateCw, Trash2, UserPlus } from 'lucide-react';
+import { FolderMinus, LogOut, RotateCw, Trash2, UserPlus, Users } from 'lucide-react';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
@@ -11,10 +11,10 @@ import { Spinner } from '@/components/ui/Spinner';
 import { Switch } from '@/components/ui/Switch';
 import { toast } from '@/components/ui/Toast';
 import { ApiClientError } from '@/lib/api/client';
-import type { ShareDto } from '@/lib/api/types';
+import type { FolderLinkDto, ShareDto } from '@/lib/api/types';
 import { t } from '@/lib/i18n/pt-br';
 import { getRecordType } from '@/lib/record-types/catalog';
-import { listShares, removeShare, shareRecord, updateShare } from '@/lib/vault/actions';
+import { listShares, removeRecordFromSharedFolder, removeShare, shareRecord, updateShare } from '@/lib/vault/actions';
 import { canGrantEdit, canManageShare, sortShares } from '@/lib/vault/share-rules';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -32,7 +32,8 @@ const sectionTitle = 'text-xs font-semibold uppercase tracking-wide text-fg-mute
 /**
  * Shares one record with other accounts (owner or `canShare` users only; `detail-share` is gated on that).
  * A delegate cannot grant above their own permission, nor change someone with more access; their own row only offers
- * "Sair". Every change reloads the list from the server.
+ * "Sair". Shared folders the record is linked into are listed too, and the owner can unlink it from any of them,
+ * including folders they are not a member of. Every change reloads the list from the server.
  */
 export function ShareDialog({ open, onClose, record }: { open: boolean; onClose: () => void; record: VaultRecord }) {
   const me = useVault((s) => s.user);
@@ -40,8 +41,12 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
   const mine = record.access.permission;
   const editAllowed = canGrantEdit(mine);
   const typeDef = getRecordType(record.data?.type ?? record.type);
+  const isOwner = record.ownerId === myId;
+  const folders = useVault((s) => s.folders);
 
   const [shares, setShares] = useState<ShareDto[] | null>(null);
+  const [folderLinks, setFolderLinks] = useState<FolderLinkDto[]>([]);
+  const [unlinking, setUnlinking] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [email, setEmail] = useState('');
   const [permission, setPermission] = useState<Grant>('view');
@@ -57,7 +62,7 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
     const seq = ++loadSeq.current;
     try {
       const list = await listShares(record.id);
-      if (seq === loadSeq.current) { setShares(list); setLoadError(null); }
+      if (seq === loadSeq.current) { setShares(list.shares); setFolderLinks(list.folderLinks); setLoadError(null); }
     } catch (e) {
       if (seq === loadSeq.current) setLoadError(errorText(e));
     }
@@ -119,6 +124,14 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
     }
     // Leaving drops the record from this account's vault (unless a shared folder still grants it): close the dialog.
     if (self) { toast.success(t.shareLeft); onClose(); } else toast.success(t.shareRemoved);
+  }
+
+  async function unlinkFolder(link: FolderLinkDto) {
+    if (unlinking) return;
+    setUnlinking(link.folderId);
+    try { await removeRecordFromSharedFolder(link.folderId, record.id); toast.success(t.shareFolderRemoved); }
+    catch (e) { toast.error(errorText(e)); }
+    finally { setUnlinking(null); await reload(); }
   }
 
   const leaving = removing?.userId === myId;
@@ -201,6 +214,38 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
               </ul>
             )}
           </section>
+
+          {folderLinks.length > 0 && (
+            <section aria-labelledby="share-folders-title" className="space-y-2">
+              <h3 id="share-folders-title" className={sectionTitle}>{t.sharedFolders} ({folderLinks.length})</h3>
+              <p className="text-xs text-fg-muted">{t.shareFoldersHint}</p>
+              <ul className="divide-y divide-border rounded-lg border border-border">
+                {folderLinks.map((link) => {
+                  // Folder names are encrypted with the folder key: known only for folders this account belongs to.
+                  const name = folders.find((f) => f.id === link.folderId)?.name;
+                  return (
+                    <li key={link.folderId} data-testid={`share-folder-${link.folderId}`} className="flex flex-wrap items-center gap-3 px-3 py-3">
+                      <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+                        <Users className="h-4 w-4" />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium text-fg [overflow-wrap:anywhere]">{t.shareFolderLink(link.folderOwnerEmail)}</p>
+                        {name && <p className="truncate text-xs text-fg-muted">{name}</p>}
+                      </div>
+                      {isOwner && (
+                        <Button
+                          variant="secondary" size="sm" data-testid={`share-folder-remove-${link.folderId}`} aria-label={t.shareFolderRemoveLabel(link.folderOwnerEmail)}
+                          loading={unlinking === link.folderId} disabled={unlinking !== null} onClick={() => { void unlinkFolder(link); }}
+                        >
+                          {unlinking !== link.folderId && <FolderMinus className="h-4 w-4" aria-hidden="true" />}{t.shareFolderRemove}
+                        </Button>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
         </div>
       </Dialog>
       {/* A sibling of the share dialog, never nested in it. */}

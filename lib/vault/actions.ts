@@ -1,5 +1,5 @@
 import { api } from '@/lib/api/client';
-import type { LoginResponse, MemberDto, SessionUser, ShareDto, VaultResponse } from '@/lib/api/types';
+import type { LoginResponse, MemberDto, SessionUser, SharesResponse, VaultResponse } from '@/lib/api/types';
 import { computeAuthKey, createRecoveryMaterial, rewrapForNewPassword, unlockDataKey, unlockPrivateKey } from '@/lib/crypto/account';
 import { decryptBytes, encryptBytes, encryptJson, encryptString, generateAesKey, wrapAesKey } from '@/lib/crypto/aes';
 import { importPublicKey, rsaWrapAesKey } from '@/lib/crypto/rsa';
@@ -83,7 +83,7 @@ export async function shareRecord(id: string, email: string, permission: 'view' 
   const r = requireRecord(id); const target = await lookupUser(email);
   await api.post(`/api/records/${id}/shares`, { userId: target.userId, encKey: await rsaWrapAesKey(await importPublicKey(target.publicKey), r.key), permission, canShare });
 }
-export const listShares = async (id: string) => (await api.get<{ shares: ShareDto[] }>(`/api/records/${id}/shares`)).shares;
+export const listShares = (id: string) => api.get<SharesResponse>(`/api/records/${id}/shares`);
 export const updateShare = (id: string, userId: string, permission: 'view' | 'edit', canShare: boolean) => api.put(`/api/records/${id}/shares/${userId}`, { permission, canShare });
 export async function removeShare(id: string, userId: string) { await api.delete(`/api/records/${id}/shares/${userId}`); if (userId !== s().user?.id) return;
   const r = s().records.find((x) => x.id === id);
@@ -104,6 +104,7 @@ export async function addRecordToSharedFolder(folderId: string, recordId: string
   await api.post(`/api/folders/${folderId}/records`, { recordId, encKey: await wrapAesKey(f.key, r.key) });
   s().upsertRecord({ ...r, sharedFolderIds: [...r.sharedFolderIds, folderId] });
 }
+/** Works for folder editors and for the record's owner, even when the owner is not (or no longer) a folder member. */
 export async function removeRecordFromSharedFolder(folderId: string, recordId: string) {
   await api.delete(`/api/folders/${folderId}/records/${recordId}`);
   const r = s().records.find((x) => x.id === recordId);

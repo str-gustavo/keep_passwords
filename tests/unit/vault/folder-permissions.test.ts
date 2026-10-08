@@ -34,20 +34,21 @@ describe('sharedFolderTargets', () => {
 });
 
 describe('record move rules', () => {
-  it('adding to a shared folder needs the key, edit access and canShare', () => {
-    expect(canShareIntoFolders(rec())).toBe(true);
-    expect(canShareIntoFolders(rec({ access: { permission: 'edit', canShare: false, favorite: false, folderId: null } }))).toBe(false);
-    expect(canShareIntoFolders(rec({ access: { permission: 'view', canShare: true, favorite: false, folderId: null } }))).toBe(false);
-    expect(canShareIntoFolders(rec({ key: null }))).toBe(false);
-    expect(canShareIntoFolders(rec({ data: null }))).toBe(false);
+  it('only the owner adds a record to a shared folder, and needs its key and data', () => {
+    expect(canShareIntoFolders(rec(), 'me')).toBe(true);
+    expect(canShareIntoFolders(rec({ ownerId: 'other', access: { permission: 'edit', canShare: true, favorite: false, folderId: null } }), 'me')).toBe(false);
+    expect(canShareIntoFolders(rec({ ownerId: 'other', access: { permission: 'view', canShare: true, favorite: false, folderId: null } }), 'me')).toBe(false);
+    expect(canShareIntoFolders(rec({ key: null }), 'me')).toBe(false);
+    expect(canShareIntoFolders(rec({ data: null }), 'me')).toBe(false);
   });
-  it('move is offered with a direct key or when the record can go into a shared folder, never from the trash', () => {
-    expect(canMoveRecord(rec())).toBe(true);
+  it('move is offered with a direct key or to the owner, never from the trash', () => {
+    expect(canMoveRecord(rec(), 'me')).toBe(true);
     const viewOnly = { permission: 'view' as const, canShare: false, favorite: false, folderId: null };
-    expect(canMoveRecord(rec({ ownerId: 'other', access: viewOnly }))).toBe(true);
-    expect(canMoveRecord(rec({ ownerId: 'other', access: viewOnly, hasDirectKey: false }))).toBe(false);
-    expect(canMoveRecord(rec({ ownerId: 'other', hasDirectKey: false, access: { permission: 'edit', canShare: true, favorite: false, folderId: null } }))).toBe(true);
-    expect(canMoveRecord(rec({ deletedAt: '2026-10-01' }))).toBe(false);
+    expect(canMoveRecord(rec({ ownerId: 'other', access: viewOnly }), 'me')).toBe(true);
+    expect(canMoveRecord(rec({ ownerId: 'other', access: viewOnly, hasDirectKey: false }), 'me')).toBe(false);
+    // A folder-only delegate with edit + canShare can no longer link the record anywhere.
+    expect(canMoveRecord(rec({ ownerId: 'other', hasDirectKey: false, access: { permission: 'edit', canShare: true, favorite: false, folderId: null } }), 'me')).toBe(false);
+    expect(canMoveRecord(rec({ deletedAt: '2026-10-01' }), 'me')).toBe(false);
   });
 });
 

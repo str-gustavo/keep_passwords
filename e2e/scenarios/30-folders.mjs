@@ -173,4 +173,25 @@ export default async function run(ctx) {
   a.waitUntil(detailIs('Intranet Equipe'), 15000, "B's edit in A");
   a.screenshot('30-shared-folder-owner');
   assert.ok(a.url().startsWith(`${baseUrl}/cofre/pasta/${sharedId}`));
+
+  // 10. The share dialog lists the shared folder link; the owner removes the record from it there.
+  a.click(tid('detail-share'));
+  a.waitFor(tid(`share-folder-${sharedId}`));
+  a.waitTextIn(tid(`share-folder-${sharedId}`), `Pasta compartilhada de ${emailA}`);
+  a.waitTextIn(tid(`share-folder-${sharedId}`), 'Equipe');
+  a.scrollIntoView(tid(`share-folder-remove-${sharedId}`));
+  a.screenshot('30-share-dialog-folder-link');
+  a.click(tid(`share-folder-remove-${sharedId}`));
+  a.waitTextIn(tid('toast'), 'Registro removido da pasta compartilhada');
+  a.waitHidden(tid(`share-folder-${sharedId}`));
+  closeDialog(a);
+  a.waitHidden(tid(`record-row-${recordId}`));
+  a.waitFor(tid('record-list-empty'));
+
+  // B no longer has the record once its vault is loaded again.
+  b.reload();
+  unlock(b, master);
+  b.waitUntil(headingIs('Equipe'), 15000, 'the shared folder in B after the unlink');
+  b.waitFor(tid('record-list-empty'));
+  assert.equal(b.count('[data-testid^="record-row-"]'), 0);
 }

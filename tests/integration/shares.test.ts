@@ -6,7 +6,10 @@ import { PUT as update, DELETE as trash } from '@/app/api/records/[id]/route';
 import { GET as listShares, POST as addShare } from '@/app/api/records/[id]/shares/route';
 import { PUT as updateShare, DELETE as removeShare } from '@/app/api/records/[id]/shares/[userId]/route';
 import { GET as vault } from '@/app/api/vault/route';
-import { encryptJson, generateAesKey, wrapAesKey, decryptJson } from '@/lib/crypto/aes';
+import { POST as createFolder } from '@/app/api/folders/route';
+import { POST as addMember } from '@/app/api/folders/[id]/members/route';
+import { POST as addFolderRecord } from '@/app/api/folders/[id]/records/route';
+import { encryptJson, encryptString, generateAesKey, wrapAesKey, decryptJson } from '@/lib/crypto/aes';
 import { importPublicKey, rsaUnwrapAesKey, rsaWrapAesKey } from '@/lib/crypto/rsa';
 import { emptyRecordData } from '@/lib/record-types/record-data';
 
@@ -83,6 +86,26 @@ describe('shares extras', () => {
     const r = await call(addShare, req('POST', `/api/records/${id}/shares`, { cookie: a.cookie, body: { userId: '11111111-1111-4111-8111-111111111111', encKey: rsaKey, permission: 'view', canShare: false } }), { id });
     expect(r.status).toBe(404);
     expect(JSON.stringify(r.data)).toContain('user_not_found');
+  });
+  it('GET /shares lists the shared folders the record is linked into, with the folder owner e-mail', async () => {
+    const { a, b, id, rsaKey, key } = await setup();
+    const mkFolder = async (u: U) => {
+      const folderKey = await generateAesKey();
+      const f = await call(createFolder, req('POST', '/api/folders', { cookie: u.cookie, body: { kind: 'shared', encName: await encryptString(folderKey, 'F'), encKey: await wrapAesKey(u.material.dataKey, folderKey) } }));
+      return { fid: f.data.folder.id as string, folderKey };
+    };
+    const own = await mkFolder(a);
+    const other = await mkFolder(b);
+    const aKey = await rsaWrapAesKey(await importPublicKey(a.material.publicKey), other.folderKey);
+    expect((await call(addMember, req('POST', `/api/folders/${other.fid}/members`, { cookie: b.cookie, body: { userId: a.userId, encKey: aKey, role: 'editor' } }), { id: other.fid })).status).toBe(201);
+    for (const { fid, folderKey } of [own, other]) {
+      expect((await call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: a.cookie, body: { recordId: id, encKey: await wrapAesKey(folderKey, key) } }), { id: fid })).status).toBe(201);
+    }
+    await share(id, a, b, rsaKey, 'view', false);
+    const r = await call(listShares, req('GET', `/api/records/${id}/shares`, { cookie: a.cookie }), { id });
+    expect(r.status).toBe(200);
+    expect(r.data.shares.map((x: { email: string }) => x.email)).toEqual(['b@b.c']);
+    expect(r.data.folderLinks).toEqual([{ folderId: own.fid, folderOwnerEmail: 'a@b.c' }, { folderId: other.fid, folderOwnerEmail: 'b@b.c' }]);
   });
   it('stranger gets 404 on GET /shares', async () => {
     const { id, c } = await setup();

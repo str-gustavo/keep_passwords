@@ -6,7 +6,7 @@ import { addShare, listShares } from '@/server/services/shares';
 export const GET = handle(async (req, ctx) => {
   const user = await requireUser(req);
   const id = await uuidParam(ctx, 'id');
-  return json({ shares: await listShares(user.id, id) });
+  return json(await listShares(user.id, id));
 });
 
 export const POST = handle(async (req, ctx) => {
