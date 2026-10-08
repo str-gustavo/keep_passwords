@@ -3,7 +3,9 @@
 // - extension pages (the popup) are trusted with the account flows, search, fill-from-popup and, from popup.html only,
 //   revealing one password;
 // - content scripts are identified by the tab they run in: they only ever see or receive records whose URL matches
-//   the tab's URL (sender.tab.url, never a URL from the payload) and, inside an iframe, the frame's URL too.
+//   the tab's URL (sender.tab.url, never a URL from the payload) and, inside an iframe, the frame's URL too;
+// - a credential captured on submit (pending.ts) belongs to the tab that captured it: only that tab, on that site, sees
+//   a summary of it (never the password) and can save it — the saved password is the captured one, not the payload's.
 // Auto-lock is enforced at request time as well (not only by the alarm), and reads by pages never extend the session.
 import { WrongPasswordError } from '@app/crypto/account';
 import { generatePassword } from '@app/generator/password';
@@ -12,22 +14,23 @@ import { t } from '@app/i18n/pt-br';
 import { APP_VAULT_PATH } from '@/shared/constants';
 import { urlsMatch } from '@/shared/domain';
 import { ExtError } from '@/shared/errors';
-import type { Credentials, FillIntoMsg, GenOptions, OpenPopupResult, Req, Res, RevealedPassword, TotpCode } from '@/shared/messages';
+import type { Credentials, FillIntoMsg, GenOptions, OpenPopupResult, Pending, PendingSummary, Req, Res, RevealedPassword, TotpCode } from '@/shared/messages';
 import { serverOrigin } from '@/shared/server-url';
+import { captureChecked, dropPending, isNeverHost, neverForSite, pendingFor, sameLogin, summarize } from './pending';
 import {
-  checkAutoLock, clearSession, loadSession, lockSession, requireUnlocked, saveSession, signOutSession, stateOf, touch,
-  type VaultRecordLite,
+  checkAutoLock, clearSession, loadSession, lockSession, requireUnlocked, saveSession, signOutSession, stateOf, statusOf, touch,
+  type SessionData, type VaultRecordLite,
 } from './session';
-import { findRecord, loadVault, matches, saveNewRecord, search, signIn, unlock, updateRecordPassword } from './vault';
+import { READ_ONLY_MESSAGE, findRecord, loadVault, matches, saveNewRecord, search, signIn, unlock, updateRecordPassword } from './vault';
 
 const INVALID_ORIGIN = 'Origem inválida';
 const INVALID_MESSAGE = 'Mensagem inválida';
 const NOT_THIS_SITE = 'Registro não corresponde a este site';
 const NEEDS_SERVER = 'Configure o endereço do servidor.';
-const NOT_AVAILABLE = 'Recurso ainda não disponível.';
+const NOTHING_PENDING = 'Nenhuma senha capturada nesta página';
 const POPUP_PATH = '/popup.html';
 
-type PageOrigin = { kind: 'page'; tabUrl: string; frameUrl: string | null; windowId: number | undefined };
+type PageOrigin = { kind: 'page'; tabUrl: string; frameUrl: string | null; tabId: number | undefined; windowId: number | undefined };
 type ExtensionOrigin = { kind: 'extension'; path: string };
 type Origin = ExtensionOrigin | PageOrigin;
 
@@ -38,7 +41,9 @@ function originOf(sender: chrome.runtime.MessageSender | undefined): Origin | nu
     try { return { kind: 'extension', path: new URL(sender.url).pathname }; } catch { return null; }
   }
   const tabUrl = sender.tab?.url;
-  if (typeof tabUrl === 'string' && tabUrl) return { kind: 'page', tabUrl, frameUrl: typeof sender.url === 'string' ? sender.url : null, windowId: sender.tab?.windowId };
+  if (typeof tabUrl === 'string' && tabUrl) {
+    return { kind: 'page', tabUrl, frameUrl: typeof sender.url === 'string' ? sender.url : null, tabId: sender.tab?.id, windowId: sender.tab?.windowId };
+  }
   return null;
 }
 
@@ -52,10 +57,17 @@ function extensionOnly(o: Origin): asserts o is ExtensionOrigin {
 }
 /** Page-originated actions extend the session only once they passed validation (popup requests are touched up front). */
 const touchFromPage = (o: Origin) => (o.kind === 'page' ? touch() : Promise.resolve());
+/** The credential this page's tab captured: same tab, same site (tab and frame), not expired. */
+function pendingOfPage(s: SessionData, o: PageOrigin): Pending | null {
+  if (o.tabId === undefined) return null;
+  const p = pendingFor(s, o.tabUrl, Date.now(), o.tabId);
+  return p && allowedFor(p.url, o) ? p : null;
+}
 
 // Runtime shape check (content scripts live in page renderers; never trust the payload's types). Being a mapped type
 // over Req['type'], it also stops compiling when a message is added without a validator.
 const isStr = (v: unknown): v is string => typeof v === 'string';
+const optStr = (v: unknown): boolean => v === undefined || isStr(v);
 const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = {
   getState: () => true,
   setServer: (m) => isStr(m.url),
@@ -74,8 +86,8 @@ const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = 
   getPending: () => true,
   discardPending: () => true,
   neverForSite: (m) => isStr(m.host),
-  saveNew: (m) => isStr(m.url) && isStr(m.login) && isStr(m.password) && isStr(m.title),
-  updatePassword: (m) => isStr(m.id) && isStr(m.password),
+  saveNew: (m) => isStr(m.title) && optStr(m.url) && optStr(m.login) && optStr(m.password),
+  updatePassword: (m) => isStr(m.id) && optStr(m.password),
   generatePassword: (m) => typeof m.opts === 'object' && m.opts !== null,
   openPopup: () => true,
   fillFromPopup: (m) => isStr(m.id) && Number.isInteger(m.tabId),
@@ -213,25 +225,83 @@ async function route(req: Req, o: Origin): Promise<Res> {
       return ok(null);
     }
 
-    // ---- captured credentials (Task 8 wires pending.ts here; savePending touches once captured) ----
-    case 'savePending':
-    case 'getPending':
-    case 'discardPending':
-    case 'neverForSite':
-      return fail(NOT_AVAILABLE);
+    // ---- captured credentials (a page only ever sees its own tab's capture, and never its password) ----
+    case 'savePending': {
+      if (o.kind !== 'page' || o.tabId === undefined) throw new ExtError(INVALID_ORIGIN);
+      if (!allowedFor(req.url, o)) throw new ExtError(NOT_THIS_SITE);
+      const s = await loadSession();
+      const status = statusOf(s);
+      // Kept while locked too (the save bar then asks to unlock); a signed-out extension has nowhere to save it.
+      if (status === 'unlocked' || status === 'locked') {
+        const p = await captureChecked(s, { url: req.url, login: req.login, password: req.password, tabId: o.tabId });
+        if (p) await saveSession({ pending: p });
+        else {
+          // Nothing to offer (already stored, never-list…): an earlier capture of this tab and site is superseded.
+          const old = pendingOfPage(s, o);
+          if (old) await dropPending(old);
+        }
+      }
+      await touch();
+      return ok(null);
+    }
+    case 'getPending': {
+      if (o.kind !== 'page') throw new ExtError(INVALID_ORIGIN);
+      // Asked on every page load: never extends the session.
+      const s = await loadSession();
+      const status = statusOf(s);
+      const p = status === 'unlocked' || status === 'locked' ? pendingOfPage(s, o) : null;
+      if (!p || (await isNeverHost(p.url))) return ok(null);
+      const summary = summarize(s, p, status === 'locked');
+      if (!summary) await dropPending(p); // the vault holds it already (saved from the popup meanwhile)
+      return ok<PendingSummary | null>(summary);
+    }
+    case 'discardPending': {
+      const s = await loadSession();
+      const p = o.kind === 'page' ? pendingOfPage(s, o) : s.pending;
+      if (p) {
+        await dropPending(p);
+        await touchFromPage(o);
+      }
+      return ok(null);
+    }
+    case 'neverForSite': {
+      if (o.kind === 'page' && !allowedFor(req.host, o)) throw new ExtError(NOT_THIS_SITE);
+      await neverForSite(req.host);
+      await touchFromPage(o);
+      return ok(null);
+    }
 
     // ---- writing ----
     case 'saveNew': {
-      await requireUnlocked();
-      if (o.kind === 'page' && !allowedFor(req.url, o)) throw new ExtError(NOT_THIS_SITE);
-      await touchFromPage(o);
-      const id = await saveNewRecord({ url: req.url, login: req.login, password: req.password, title: req.title });
+      const s = await requireUnlocked();
+      if (o.kind === 'page') {
+        // The save bar: what this tab captured; url, login and password in the payload are ignored.
+        const p = pendingOfPage(s, o);
+        if (!p) throw new ExtError(NOTHING_PENDING);
+        await touch();
+        const id = await saveNewRecord({ url: p.url, login: p.login, password: p.password, title: req.title });
+        await dropPending(p);
+        return ok({ id });
+      }
+      if (req.url === undefined || req.password === undefined) throw new ExtError(INVALID_MESSAGE);
+      const id = await saveNewRecord({ url: req.url, login: req.login ?? '', password: req.password, title: req.title });
       return ok({ id });
     }
     case 'updatePassword': {
-      const r = findRecord((await requireUnlocked()).vault, req.id);
+      const s = await requireUnlocked();
+      const r = findRecord(s.vault, req.id);
       recordFor(r, o);
-      await touchFromPage(o);
+      if (r.permission === 'view') throw new ExtError(READ_ONLY_MESSAGE);
+      if (o.kind === 'page') {
+        // The save bar: this tab's capture of this record's login; its password, never the payload's.
+        const p = pendingOfPage(s, o);
+        if (!p || !sameLogin(p.login, r.login)) throw new ExtError(NOTHING_PENDING);
+        await touch();
+        await updateRecordPassword(r.id, p.password);
+        await dropPending(p);
+        return ok(null);
+      }
+      if (!req.password) throw new ExtError(INVALID_MESSAGE);
       await updateRecordPassword(r.id, req.password);
       return ok(null);
     }

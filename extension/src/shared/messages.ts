@@ -14,12 +14,23 @@ export type Req =
   | { type: 'fillRequest'; id: string } | { type: 'totpFor'; id: string }
   | { type: 'revealPassword'; id: string }                  // popup.html only → { password } (copy to clipboard)
   | { type: 'savePending'; url: string; login: string; password: string } | { type: 'getPending' } | { type: 'discardPending' } | { type: 'neverForSite'; host: string }
-  | { type: 'saveNew'; url: string; login: string; password: string; title: string } | { type: 'updatePassword'; id: string; password: string }
+  // From a content script only `title` / `id` count: the url, login and password come from the credential that tab
+  // captured (savePending), never from the payload. The popup passes them explicitly.
+  | { type: 'saveNew'; title: string; url?: string; login?: string; password?: string } | { type: 'updatePassword'; id: string; password?: string }
   | { type: 'generatePassword'; opts: GenOptions }
   | { type: 'openPopup' }
   | { type: 'fillFromPopup'; id: string; tabId: number };
 export type Res<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
-export interface Pending { url: string; host: string; login: string; password: string; createdAt: number; existingId: string | null; kind: 'new' | 'update' }
+/**
+ * A credential captured on submit, waiting for "Salvar?" (service worker only, in storage.session; never sent out).
+ * `url` is the page origin; `tabId` is the tab whose content script captured it — only that tab can see or use it.
+ */
+export interface Pending { url: string; host: string; login: string; password: string; createdAt: number; existingId: string | null; kind: 'new' | 'update'; tabId?: number }
+/**
+ * `getPending` answer: what the save bar shows, never the password. `title` is the suggested record title (the host);
+ * `locked` means the vault must be unlocked first (the capture is kept meanwhile; existingId/existingTitle are null).
+ */
+export interface PendingSummary { kind: 'new' | 'update'; login: string; host: string; title: string; existingId: string | null; existingTitle: string | null; locked: boolean }
 
 /** `fillRequest` answer: the one record the user picked, for the page it was checked against. */
 export interface Credentials { login: string; password: string }

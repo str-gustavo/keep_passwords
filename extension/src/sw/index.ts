@@ -2,6 +2,7 @@
 // All state lives in chrome.storage.session (see session.ts), so the worker may be stopped and restarted at any time.
 import { AUTOLOCK_ALARM, BADGE_COLOR, SESSION_KEY } from '@/shared/constants';
 import type { Req, Res } from '@/shared/messages';
+import { purgeExpiredPending } from './pending';
 import { handle } from './router';
 import { checkAutoLock, loadSession, statusOf } from './session';
 import { matches } from './vault';
@@ -35,7 +36,7 @@ chrome.runtime.onMessage.addListener((req: unknown, sender, sendResponse) => {
   return true;
 });
 
-// ---- auto-lock: once a minute, compare lastActivity with the account's lockMinutes ----
+// ---- auto-lock: once a minute, compare lastActivity with the account's lockMinutes (and forget expired captures) ----
 const ensureAlarm = () => chrome.alarms.create(AUTOLOCK_ALARM, { periodInMinutes: 1 });
 const onBoot = () => { void hardenStorage(); void ensureAlarm().catch(() => undefined); };
 chrome.runtime.onInstalled.addListener(onBoot);
@@ -45,7 +46,8 @@ void chrome.alarms.get(AUTOLOCK_ALARM).then((a) => (a ? undefined : ensureAlarm(
 
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name !== AUTOLOCK_ALARM) return;
-  return checkAutoLock().then(() => undefined, () => undefined);
+  const quiet = (p: Promise<unknown>) => p.then(() => undefined, () => undefined);
+  return Promise.all([quiet(checkAutoLock()), quiet(purgeExpiredPending())]).then(() => undefined);
 });
 
 // ---- badge: number of records matching the tab (nothing while locked) ----

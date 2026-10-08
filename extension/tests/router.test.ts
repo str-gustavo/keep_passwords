@@ -318,25 +318,244 @@ describe('server and account', () => {
   });
 });
 
-describe('saveNew / updatePassword', () => {
-  it('a page can only create a record for its own site', async () => {
+const NOT_THIS_SITE = { ok: false, error: 'Registro não corresponde a este site' };
+const NOTHING_PENDING = { ok: false, error: 'Nenhuma senha capturada nesta página' };
+const LOCKED = { ok: false, error: 'Cofre bloqueado' };
+const READ_ONLY = { ok: false, error: 'Você só tem permissão de leitura neste registro.' };
+/** The content script of tab `tabId` reports a submitted login form on `url`. */
+const submit = (url: string, login: string, password: string, tabId = 7, frameUrl = url) =>
+  handle({ type: 'savePending', url, login, password }, pageSender(url, tabId, frameUrl));
+const getPending = (url: string, tabId = 7, frameUrl = url) => handle({ type: 'getPending' }, pageSender(url, tabId, frameUrl));
+const storedPending = async () => (await loadSession()).pending;
+
+describe('savePending', () => {
+  it('stores the capture for the sender tab (origin only), counts as activity and answers nothing secret', async () => {
+    const before = Date.now() - 30_000;
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: before });
+    await expect(submit('https://github.com/login?return_to=/x', 'bob', 'captured-pw')).resolves.toEqual({ ok: true, data: null });
+    expect(await storedPending()).toMatchObject({ url: 'https://github.com', host: 'github.com', login: 'bob', password: 'captured-pw', kind: 'new', existingId: null, tabId: 7 });
+    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
+  });
+
+  it('refuses a payload url that is not the sender page (or frame), without storing or touching', async () => {
+    const before = Date.now() - 30_000;
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: before });
+    await expect(handle({ type: 'savePending', url: 'https://evil.com/login', login: 'a', password: 'b' }, pageSender('https://github.com/login'))).resolves.toEqual(NOT_THIS_SITE);
+    await expect(submit('https://github.com/login', 'a', 'b', 7, 'https://ads.evil.com/frame')).resolves.toEqual(NOT_THIS_SITE);
+    await expect(handle({ type: 'savePending', url: 'not a url', login: 'a', password: 'b' }, pageSender('https://github.com/login'))).resolves.toEqual(NOT_THIS_SITE);
+    expect(await storedPending()).toBeNull();
+    expect((await loadSession()).lastActivity).toBe(before);
+  });
+
+  it('is refused from the popup or a sender without a tab', async () => {
     await unlocked();
-    const req: Req = { type: 'saveNew', url: 'https://github.com/login', login: 'a', password: 'b', title: 'GitHub' };
-    await expect(handle(req, pageSender('https://evil.com'))).resolves.toEqual({ ok: false, error: 'Registro não corresponde a este site' });
+    await expect(handle({ type: 'savePending', url: 'https://github.com', login: 'a', password: 'b' }, popupSender)).resolves.toEqual(INVALID);
+    await expect(handle({ type: 'savePending', url: 'https://github.com', login: 'a', password: 'b' }, { id: MOCK_EXTENSION_ID })).resolves.toEqual(INVALID);
+    expect(await storedPending()).toBeNull();
+  });
+
+  it('a later submit on the same tab and site supersedes the earlier capture (a mistyped password is not offered)', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'ana', 'typo-pw');
+    expect(await storedPending()).toMatchObject({ password: 'typo-pw', kind: 'update' });
+    await submit('https://github.com/login', 'ana', 'pw'); // the stored one: nothing to offer
+    expect(await storedPending()).toBeNull();
+    await submit('https://github.com/login', 'ana', 'typo-pw');
+    await submit('https://other.com/login', 'ana', 'pw', 8); // another tab's capture replaces it (one slot)
+    expect(await storedPending()).toMatchObject({ host: 'other.com', tabId: 8 });
+    await submit('https://github.com/login', 'ana', 'pw', 7); // nothing to offer, and not this tab's capture: kept
+    expect(await storedPending()).toMatchObject({ host: 'other.com', tabId: 8 });
+  });
+
+  it('keeps nothing for credentials already stored, for the Nexus server itself or when signed out', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'ana', 'pw');
+    await submit(`${SERVER}/entrar`, 'a@b.c', 'master-password');
+    expect(await storedPending()).toBeNull();
+    await saveSession({ serverUrl: SERVER, token: null, user: null, secrets: null });
+    await submit('https://other.com/login', 'a', 'b');
+    expect(await storedPending()).toBeNull();
+  });
+});
+
+describe('getPending', () => {
+  it('gives the capturing tab a summary without the password, and does not count as activity', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    const before = Date.now() - 30_000;
+    await saveSession({ lastActivity: before });
+    const res = await getPending('https://github.com/dashboard');
+    expect(res).toEqual({ ok: true, data: { kind: 'new', login: 'bob', host: 'github.com', title: 'github.com', existingId: null, existingTitle: null, locked: false } });
+    expect(JSON.stringify(res)).not.toContain('captured-pw');
+    expect((await loadSession()).lastActivity).toBe(before);
+  });
+
+  it('answers null to another tab, another site, a cross-site frame, and once expired', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await expect(getPending('https://github.com/', 8)).resolves.toEqual({ ok: true, data: null });
+    await expect(getPending('https://evil.com/', 7)).resolves.toEqual({ ok: true, data: null });
+    await expect(getPending('https://github.com/', 7, 'https://ads.evil.com/frame')).resolves.toEqual({ ok: true, data: null });
+    const p = (await storedPending())!;
+    await saveSession({ pending: { ...p, createdAt: Date.now() - 5 * 60_000 - 1 } });
+    await expect(getPending('https://github.com/')).resolves.toEqual({ ok: true, data: null });
+  });
+
+  it('is refused from the popup', async () => {
+    await unlocked();
+    await expect(handle({ type: 'getPending' }, popupSender)).resolves.toEqual(INVALID);
+  });
+
+  it('respects the never-list, even for a capture already stored', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await chrome.storage.local.set({ neverHosts: ['github.com'] });
+    await expect(getPending('https://github.com/')).resolves.toEqual({ ok: true, data: null });
+  });
+
+  it('offers an update with the record title when the login exists with another password', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'ana', 'new-pw');
+    await expect(getPending('https://github.com/')).resolves.toEqual({ ok: true, data: { kind: 'update', login: 'ana', host: 'github.com', title: 'github.com', existingId: '1', existingTitle: 'GitHub', locked: false } });
+  });
+
+  it('while locked: keeps the capture and reports locked; after unlocking it is checked against the vault', async () => {
+    await locked();
+    await expect(submit('https://github.com/login', 'ana', 'new-pw')).resolves.toEqual({ ok: true, data: null });
+    await expect(getPending('https://github.com/')).resolves.toEqual({ ok: true, data: { kind: 'new', login: 'ana', host: 'github.com', title: 'github.com', existingId: null, existingTitle: null, locked: true } });
+    await saveSession({ secrets, vault: [github, bank], lastActivity: Date.now() }); // what unlock does
+    await expect(getPending('https://github.com/')).resolves.toMatchObject({ ok: true, data: { kind: 'update', existingId: '1', locked: false } });
+  });
+
+  it('drops a capture the vault already holds (saved from the popup meanwhile)', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await saveSession({ vault: [github, r({ id: '5', url: 'https://github.com', login: 'bob', password: 'captured-pw' })] });
+    await expect(getPending('https://github.com/')).resolves.toEqual({ ok: true, data: null });
+    expect(await storedPending()).toBeNull();
+  });
+});
+
+describe('saveNew', () => {
+  it('from a page saves the tab capture and ignores the credentials in the payload', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    const before = Date.now() - 30_000;
+    await saveSession({ lastActivity: before });
+    const req: Req = { type: 'saveNew', title: 'Meu GitHub', url: 'https://evil.com', login: 'x', password: 'payload-pw' };
     await expect(handle(req, pageSender('https://github.com/session'))).resolves.toEqual({ ok: true, data: { id: 'new-id' } });
-    expect(vault.saveNewRecord).toHaveBeenCalledWith({ url: 'https://github.com/login', login: 'a', password: 'b', title: 'GitHub' });
+    expect(vault.saveNewRecord).toHaveBeenCalledWith({ url: 'https://github.com', login: 'bob', password: 'captured-pw', title: 'Meu GitHub' });
+    expect(await storedPending()).toBeNull();
+    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
   });
-  it('a page can only update its own records', async () => {
+
+  it('from a page needs that tab’s capture for that site', async () => {
     await unlocked();
-    await expect(handle({ type: 'updatePassword', id: '1', password: 'n' }, pageSender('https://evil.com'))).resolves.toEqual({ ok: false, error: 'Registro não corresponde a este site' });
-    await expect(handle({ type: 'updatePassword', id: '1', password: 'n' }, pageSender('https://github.com'))).resolves.toEqual({ ok: true, data: null });
-    expect(vault.updateRecordPassword).toHaveBeenCalledWith('1', 'n');
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://github.com/', 8))).resolves.toEqual(NOTHING_PENDING);
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://evil.com/', 7))).resolves.toEqual(NOTHING_PENDING);
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://github.com/', 7, 'https://ads.evil.com/frame'))).resolves.toEqual(NOTHING_PENDING);
+    expect(vault.saveNewRecord).not.toHaveBeenCalled();
+    expect(await storedPending()).not.toBeNull();
   });
+
+  it('from the popup uses its payload', async () => {
+    await unlocked();
+    const req: Req = { type: 'saveNew', url: 'https://banco.com.br/login', login: 'z', password: 'pz', title: 'Banco 2' };
+    await expect(handle(req, popupSender)).resolves.toEqual({ ok: true, data: { id: 'new-id' } });
+    expect(vault.saveNewRecord).toHaveBeenCalledWith({ url: 'https://banco.com.br/login', login: 'z', password: 'pz', title: 'Banco 2' });
+    await expect(handle({ type: 'saveNew', title: 'sem senha' }, popupSender)).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
+  });
+
+  it('is refused while locked, the capture kept', async () => {
+    await locked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await expect(handle({ type: 'saveNew', title: 'x' }, pageSender('https://github.com/'))).resolves.toEqual(LOCKED);
+    expect(vault.saveNewRecord).not.toHaveBeenCalled();
+    expect(await storedPending()).not.toBeNull();
+  });
+
   it('rejects malformed payloads', async () => {
     await unlocked();
     const bad = { type: 'saveNew', url: 'https://github.com', login: 1, password: null, title: 'x' } as unknown as Req;
     await expect(handle(bad, popupSender)).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
+    await expect(handle({ type: 'saveNew' } as unknown as Req, pageSender('https://github.com'))).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
     expect(vault.saveNewRecord).not.toHaveBeenCalled();
+  });
+});
+
+describe('updatePassword', () => {
+  it('from a page writes the captured password (not the payload’s) and clears the capture', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'ana', 'new-pw');
+    await expect(handle({ type: 'updatePassword', id: '1', password: 'payload-pw' }, pageSender('https://github.com/'))).resolves.toEqual({ ok: true, data: null });
+    expect(vault.updateRecordPassword).toHaveBeenCalledWith('1', 'new-pw');
+    expect(await storedPending()).toBeNull();
+  });
+
+  it('from a page: only its own site’s records, only with a capture of that login', async () => {
+    const other = r({ id: '3', title: 'GitHub 2', url: 'https://github.com', login: 'carol', password: 'c' });
+    await unlocked([github, bank, other]);
+    await expect(handle({ type: 'updatePassword', id: '1' }, pageSender('https://github.com/'))).resolves.toEqual(NOTHING_PENDING);
+    await submit('https://github.com/login', 'ana', 'new-pw');
+    await expect(handle({ type: 'updatePassword', id: '1' }, pageSender('https://evil.com'))).resolves.toEqual(NOT_THIS_SITE);
+    await expect(handle({ type: 'updatePassword', id: '3' }, pageSender('https://github.com/'))).resolves.toEqual(NOTHING_PENDING);
+    await expect(handle({ type: 'updatePassword', id: '1' }, pageSender('https://github.com/', 8))).resolves.toEqual(NOTHING_PENDING);
+    expect(vault.updateRecordPassword).not.toHaveBeenCalled();
+  });
+
+  it('from the popup uses its payload', async () => {
+    await unlocked();
+    await expect(handle({ type: 'updatePassword', id: '2', password: 'n' }, popupSender)).resolves.toEqual({ ok: true, data: null });
+    expect(vault.updateRecordPassword).toHaveBeenCalledWith('2', 'n');
+    await expect(handle({ type: 'updatePassword', id: '2' }, popupSender)).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
+  });
+
+  it('is refused on a read-only shared record, from the popup and from a page', async () => {
+    const shared = r({ id: '9', title: 'Compartilhado', url: 'https://github.com', login: 'ana', password: 'old', permission: 'view' });
+    await unlocked([shared]);
+    await expect(handle({ type: 'updatePassword', id: '9', password: 'n' }, popupSender)).resolves.toEqual(READ_ONLY);
+    await saveSession({ pending: { url: 'https://github.com', host: 'github.com', login: 'ana', password: 'n', createdAt: Date.now(), existingId: '9', kind: 'update', tabId: 7 } });
+    await expect(handle({ type: 'updatePassword', id: '9' }, pageSender('https://github.com/'))).resolves.toEqual(READ_ONLY);
+    expect(vault.updateRecordPassword).not.toHaveBeenCalled();
+  });
+
+  it('is refused while locked', async () => {
+    await locked();
+    await submit('https://github.com/login', 'ana', 'new-pw');
+    await expect(handle({ type: 'updatePassword', id: '1' }, pageSender('https://github.com/'))).resolves.toEqual(LOCKED);
+  });
+});
+
+describe('discardPending / neverForSite', () => {
+  it('discardPending forgets only the capture of the asking tab', async () => {
+    await unlocked();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    await expect(handle({ type: 'discardPending' }, pageSender('https://github.com/', 8))).resolves.toEqual({ ok: true, data: null });
+    expect(await storedPending()).not.toBeNull();
+    await expect(handle({ type: 'discardPending' }, pageSender('https://github.com/', 7))).resolves.toEqual({ ok: true, data: null });
+    expect(await storedPending()).toBeNull();
+  });
+
+  it('neverForSite stores the registrable domain, drops the capture and suppresses later captures', async () => {
+    await unlocked();
+    await submit('https://gist.github.com/login', 'bob', 'captured-pw');
+    await expect(handle({ type: 'neverForSite', host: 'gist.github.com' }, pageSender('https://gist.github.com/login'))).resolves.toEqual({ ok: true, data: null });
+    expect((await chrome.storage.local.get('neverHosts')).neverHosts).toEqual(['github.com']);
+    expect(await storedPending()).toBeNull();
+    await submit('https://github.com/login', 'bob', 'captured-pw');
+    expect(await storedPending()).toBeNull();
+    await expect(getPending('https://github.com/')).resolves.toEqual({ ok: true, data: null });
+  });
+
+  it('a page can only add its own site; the popup any valid host', async () => {
+    await unlocked();
+    await expect(handle({ type: 'neverForSite', host: 'banco.com.br' }, pageSender('https://github.com/'))).resolves.toEqual(NOT_THIS_SITE);
+    await expect(handle({ type: 'neverForSite', host: 'github.com' }, pageSender('https://github.com/', 7, 'https://ads.evil.com/frame'))).resolves.toEqual(NOT_THIS_SITE);
+    expect((await chrome.storage.local.get('neverHosts')).neverHosts).toBeUndefined();
+    await expect(handle({ type: 'neverForSite', host: 'https://www.banco.com.br/x' }, popupSender)).resolves.toEqual({ ok: true, data: null });
+    await expect(handle({ type: 'neverForSite', host: 'javascript:alert(1)' }, popupSender)).resolves.toMatchObject({ ok: false });
+    expect((await chrome.storage.local.get('neverHosts')).neverHosts).toEqual(['banco.com.br']);
   });
 });
 

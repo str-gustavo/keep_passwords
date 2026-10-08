@@ -23,6 +23,7 @@ type DecryptedRecord = Awaited<ReturnType<typeof decryptVault>>['records'][numbe
 /** Record types whose login/password/url the extension fills and searches. */
 const FILLABLE_TYPES = new Set(['login', 'bankAccount', 'membership', 'server', 'databaseCredentials', 'wifi']);
 const MAX_TITLE = 500; // recordDataSchema's limit: a longer title would make the record undecryptable in the app
+export const READ_ONLY_MESSAGE = 'Você só tem permissão de leitura neste registro.';
 
 // ---------------------------------------------------------------------------------------------------------------
 // Pure helpers (no secrets in what they return)
@@ -185,7 +186,7 @@ export async function updateRecordPassword(id: string, password: string): Promis
   await loadVault(true);
   const s = await requireUnlocked();
   const r = findRecord(s.vault, id);
-  if (r.permission === 'view') throw new ExtError('Você só tem permissão de leitura neste registro.');
+  if (r.permission === 'view') throw new ExtError(READ_ONLY_MESSAGE);
   const key = await importAesKey(fromBase64(r.recordKeyRaw));
   const next: RecordData = touchPasswordDates(r.data, { ...r.data, fields: { ...r.data.fields, password } });
   const encData = await encryptJson(key, next);

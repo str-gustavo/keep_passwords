@@ -42,6 +42,16 @@ describe('service worker entry', () => {
     expect(s.vault).toEqual([]);
   });
 
+  it('forgets an expired captured credential when the alarm fires', async () => {
+    const pending = { url: 'https://site.com', host: 'site.com', login: 'a', password: 'captured', createdAt: Date.now() - 5 * 60_000 - 1, existingId: null, kind: 'new' as const, tabId: 3 };
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets: null, pending });
+    await fireAlarm(AUTOLOCK_ALARM);
+    expect((await loadSession()).pending).toBeNull();
+    await saveSession({ pending: { ...pending, createdAt: Date.now() } });
+    await fireAlarm(AUTOLOCK_ALARM);
+    expect((await loadSession()).pending).not.toBeNull();
+  });
+
   it('badges the active tab with its match count, in Nexus orange', async () => {
     await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: vaultList, lastActivity: Date.now() });
     const tab = addTab({ url: 'https://github.com/login' });
