@@ -12,6 +12,7 @@ import { filterRecords, folderNameOf, type ListFilter } from '@/lib/vault/select
 import { useVault } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
 import { RecordDetail } from './RecordDetail';
+import { RecordForm } from './RecordForm';
 import { RecordList } from './RecordList';
 import { TrashHeader } from './TrashHeader';
 
@@ -37,6 +38,10 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
   // trash, stops showing in the detail pane and mobile falls back to the list.
   const inScope = useMemo(() => filterRecords(records, filter, '', userId), [records, filter, userId]);
   const selected = inScope.find((r) => r.id === selectedId) ?? null;
+  // The live record (not a snapshot): attachments uploaded from the form show up in it immediately.
+  const editingRecord = editing?.mode === 'edit' ? records.find((r) => r.id === editing.id) : undefined;
+  // New records land in the personal folder being viewed; shared folders need an explicit "add to folder".
+  const newRecordFolderId = filter.kind === 'folder' && folders.some((f) => f.id === filter.folderId && f.kind === 'personal') ? filter.folderId : null;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -100,8 +105,10 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
         </section>
       </div>
 
-      {/* Task 25: <RecordForm mode={editing.mode} … onClose={() => setEditing(null)} /> */}
-      {editing && <div data-testid="record-form-placeholder" data-mode={editing.mode} />}
+      {editing?.mode === 'new' && <RecordForm key="new" mode="new" folderId={newRecordFolderId} onClose={() => setEditing(null)} />}
+      {editing?.mode === 'edit' && editingRecord?.data && (
+        <RecordForm key={editingRecord.id} mode="edit" record={editingRecord} onClose={() => setEditing(null)} />
+      )}
     </div>
   );
 }
