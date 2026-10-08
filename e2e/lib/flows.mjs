@@ -30,7 +30,66 @@ export function signIn(b, ctx, { email, password }) {
   b.waitFor(tid('search'), 30000);
 }
 
-// Filled in by Task 31, together with the scenarios that exercise the login form.
+// Signs out through Configurações → Sair and waits for the sign-in page.
+export function signOut(b) {
+  b.click(tid('nav-settings'));
+  b.waitFor(tid('settings-logout'));
+  b.scrollIntoView(tid('settings-logout'));
+  b.click(tid('settings-logout'));
+  b.waitUrl('/entrar', 15000);
+  b.waitFor(tid('auth-email'));
+}
+
+// Unlocks the lock screen (shown after a reload or the auto-lock: keys only live in memory).
+export function unlock(b, password) {
+  b.waitFor(tid('lock-password'), 30000);
+  b.fill(tid('lock-password'), password);
+  b.click(tid('lock-submit'));
+  b.waitHidden(tid('lock-password'), 30000);
+}
+
+// Downloads (attachments, export) go through a blob URL and a click on an <a download>, which the CLI cannot
+// observe. This page-side stub records each download's file name and blob instead of saving it; read them back with
+// `lastDownload`. Client-side navigation keeps it installed; a full page load removes it.
+export function stubDownloads(b) {
+  b.evalJs(`(() => {
+    if (window.__downloads) return true;
+    window.__downloads = [];
+    const blobs = new Map();
+    const create = URL.createObjectURL.bind(URL);
+    URL.createObjectURL = (obj) => { const url = create(obj); blobs.set(url, obj); return url; };
+    HTMLAnchorElement.prototype.click = function () {
+      if (!this.hasAttribute('download')) return HTMLElement.prototype.click.call(this);
+      window.__downloads.push({ name: this.download, blob: blobs.get(this.href) ?? null });
+    };
+    return true;
+  })()`);
+}
+
+// The latest stubbed download as { name, size, text } (null if none yet).
+export function lastDownload(b) {
+  return b.evalJs(`(async () => {
+    const d = (window.__downloads ?? []).at(-1);
+    if (!d) return null;
+    return { name: d.name, size: d.blob ? d.blob.size : null, text: d.blob ? await d.blob.text() : null };
+  })()`);
+}
+
+// Creates a login record from the current vault page and returns its id (the `?r=` param of the URL).
+// Empty values are skipped. Record passwords should be long and unique: headless Chrome's password check can freeze
+// input in the tab after a short, weak value is saved from a password field.
 export function createLogin(b, ctx, { title, login, password, url, totp }) {
-  throw new Error('createLogin is filled in by Task 31');
+  b.click(tid('new-record'));
+  b.waitFor(tid('type-login'));
+  b.click(tid('type-login'));
+  b.waitFor(tid('field-title'));
+  for (const [key, value] of Object.entries({ title, login, password, url, totp })) if (value) b.fill(tid(`field-${key}`), value);
+  b.scrollIntoView(tid('record-save'));
+  b.click(tid('record-save'));
+  b.waitHidden(tid('record-save'));
+  b.waitUntil(
+    `document.querySelector('[data-testid="detail-title"]')?.innerText.trim() === ${JSON.stringify(title)} && new URLSearchParams(location.search).has('r')`,
+    15000, `detail-title "${title}"`,
+  );
+  return new URL(b.url()).searchParams.get('r');
 }
