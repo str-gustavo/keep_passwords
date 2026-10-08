@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { and, eq } from 'drizzle-orm';
+import { getDb, schema } from '@/server/db';
 import { useFreshDb } from '../helpers/db';
 import { call, req, registerUser } from '../helpers/client';
 import { POST as createFolder } from '@/app/api/folders/route';
@@ -98,5 +100,75 @@ describe('folder cycles', () => {
     const r = await call(renameFolder, req('PUT', `/api/folders/${p}`, { cookie: a.cookie, body: { encName, parentId: g } }), { id: p });
     expect(r.status).toBe(400);
     expect((await call(renameFolder, req('PUT', `/api/folders/${g}`, { cookie: a.cookie, body: { encName, parentId: p } }), { id: g })).status).toBe(200);
+  });
+});
+
+describe('folder edge cases', () => {
+  async function setup() {
+    const a = await registerUser('a@b.c');
+    const b = await registerUser('b@b.c');
+    const c = await registerUser('c@b.c');
+    const folderKey = await generateAesKey();
+    const f = await call(createFolder, req('POST', '/api/folders', { cookie: a.cookie, body: { kind: 'shared', encName: await encryptString(folderKey, 'Eq'), encKey: await wrapAesKey(a.material.dataKey, folderKey) } }));
+    const fid = f.data.folder.id as string;
+    const wrap = async (u: typeof b) => rsaWrapAesKey(await importPublicKey(u.material.publicKey), folderKey);
+    const add = (u: typeof b, role: string, key?: string) => async () => call(addMember, req('POST', `/api/folders/${fid}/members`, { cookie: a.cookie, body: { userId: u.userId, encKey: key ?? await wrap(u), role } }), { id: fid });
+    return { a, b, c, folderKey, fid, wrap, add };
+  }
+
+  it('personal delete re-parents children and sends records to root', async () => {
+    const a = await registerUser('a@b.c');
+    const encName = await encryptString(a.material.dataKey, 'P');
+    const mk = async (parentId?: string) => (await call(createFolder, req('POST', '/api/folders', { cookie: a.cookie, body: { kind: 'personal', encName, parentId } }))).data.folder.id as string;
+    const p = await mk(); const m = await mk(p); const ch = await mk(m);
+    const { id: rid } = await record(a.cookie, a.material.dataKey);
+    await call(meta, req('PUT', `/api/records/${rid}/meta`, { cookie: a.cookie, body: { folderId: m } }), { id: rid });
+    expect((await call(deleteFolder, req('DELETE', `/api/folders/${m}`, { cookie: a.cookie }), { id: m })).status).toBe(200);
+    const v = await call(vault, req('GET', '/api/vault', { cookie: a.cookie }));
+    expect(v.data.folders.find((x: { id: string }) => x.id === ch).parentId).toBe(p);
+    expect(v.data.records[0].access.folderId).toBeNull();
+  });
+
+  it('role gates, link rules and validation', async () => {
+    const { a, b, c, folderKey, fid, wrap, add } = await setup();
+    expect((await add(b, 'viewer')()).status).toBe(201);
+    expect((await add(c, 'editor')()).status).toBe(201);
+    const { id: rid, key } = await record(a.cookie, a.material.dataKey);
+    const linkKey = await wrapAesKey(folderKey, key);
+    expect((await call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: a.cookie, body: { recordId: rid, encKey: linkKey } }), { id: fid })).status).toBe(201);
+    expect((await call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: a.cookie, body: { recordId: rid, encKey: linkKey } }), { id: fid })).status).toBe(409);
+    expect((await add(b, 'viewer')()).status).toBe(409);
+    expect((await call(removeFolderRecord, req('DELETE', `/api/folders/${fid}/records/${rid}`, { cookie: b.cookie }), { id: fid, recordId: rid })).status).toBe(403);
+    expect((await call(addMember, req('POST', `/api/folders/${fid}/members`, { cookie: c.cookie, body: { userId: b.userId, encKey: await wrap(b), role: 'viewer' } }), { id: fid })).status).toBe(403);
+    expect((await call(updateMember, req('PUT', `/api/folders/${fid}/members/${b.userId}`, { cookie: c.cookie, body: { role: 'editor' } }), { id: fid, userId: b.userId })).status).toBe(403);
+    expect((await call(removeMember, req('DELETE', `/api/folders/${fid}/members/${b.userId}`, { cookie: c.cookie }), { id: fid, userId: b.userId })).status).toBe(403);
+    expect((await call(renameFolder, req('PUT', `/api/folders/${fid}`, { cookie: c.cookie, body: { encName: await encryptString(folderKey, 'N') } }), { id: fid })).status).toBe(403);
+    expect((await call(renameFolder, req('PUT', `/api/folders/${fid}`, { cookie: a.cookie, body: { encName: await encryptString(folderKey, 'N'), parentId: crypto.randomUUID() } }), { id: fid })).status).toBe(400);
+    expect((await call(removeMember, req('DELETE', `/api/folders/${fid}/members/${a.userId}`, { cookie: a.cookie }), { id: fid, userId: a.userId })).status).toBe(400);
+    const d = await registerUser('d@b.c');
+    expect((await call(listMembers, req('GET', `/api/folders/${fid}/members`, { cookie: d.cookie }), { id: fid })).status).toBe(404);
+    expect((await add(d, 'viewer', Buffer.alloc(32, 1).toString('base64'))()).status).toBe(400);
+    const other = await registerUser('e@b.c');
+    const pf = await call(createFolder, req('POST', '/api/folders', { cookie: other.cookie, body: { kind: 'personal', encName: await encryptString(other.material.dataKey, 'X') } }));
+    expect((await call(createFolder, req('POST', '/api/folders', { cookie: a.cookie, body: { kind: 'personal', encName: await encryptString(a.material.dataKey, 'Y'), parentId: pf.data.folder.id } }))).status).toBe(404);
+  });
+
+  it('linking requires edit and canShare on the record', async () => {
+    const { a, c, folderKey, fid, add } = await setup();
+    expect((await add(c, 'editor')()).status).toBe(201);
+    const { id: rid, key } = await record(a.cookie, a.material.dataKey);
+    const linkKey = await wrapAesKey(folderKey, key);
+    const db = await getDb();
+    const grant = async (permission: 'view' | 'edit', canShare: boolean) => {
+      await db.delete(schema.recordKeys).where(and(eq(schema.recordKeys.recordId, rid), eq(schema.recordKeys.userId, c.userId)));
+      await db.insert(schema.recordKeys).values({ recordId: rid, userId: c.userId, encKey: linkKey, keyType: 'rsa', permission, canShare });
+    };
+    const link = () => call(addFolderRecord, req('POST', `/api/folders/${fid}/records`, { cookie: c.cookie, body: { recordId: rid, encKey: linkKey } }), { id: fid });
+    await grant('view', true);
+    expect((await link()).status).toBe(403);
+    await grant('edit', false);
+    expect((await link()).status).toBe(403);
+    await grant('edit', true);
+    expect((await link()).status).toBe(201);
   });
 });

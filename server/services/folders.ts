@@ -44,6 +44,7 @@ export async function renameFolder(userId: string, id: string, i: { encName: str
   assertBlob(i.encName, 'encName');
   const { db, folder, role } = await folderRole(userId, id);
   requireRole(role, folder.kind === 'shared' ? 'admin' : 'owner');
+  if (folder.kind === 'shared' && i.parentId) throw new ApiError(400, 'validation', 'Pasta compartilhada não aceita pasta pai');
   if (folder.kind === 'personal' && i.parentId) {
     await assertOwnPersonalFolder(userId, i.parentId);
     let cur: string | null = i.parentId;
@@ -79,9 +80,9 @@ export async function addMember(userId: string, id: string, i: { userId: string;
   const { db, folder, role } = await folderRole(userId, id);
   if (folder.kind !== 'shared') throw new ApiError(400, 'validation', 'Pasta pessoal não tem membros');
   requireRole(role, 'admin');
-  if (!(await db.query.users.findFirst({ where: eq(schema.users.id, i.userId) }))) throw new ApiError(404, 'user_not_found', 'Nenhuma conta com este e-mail');
+  if (!(await db.query.users.findFirst({ where: eq(schema.users.id, i.userId) }))) throw new ApiError(404, 'user_not_found', 'Usuário não encontrado');
   if (await db.query.folderMembers.findFirst({ where: and(eq(schema.folderMembers.folderId, id), eq(schema.folderMembers.userId, i.userId)) })) throw new ApiError(409, 'already_member', 'Usuário já é membro');
-  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(i.encKey) || Buffer.from(i.encKey, 'base64').length !== 256) throw new ApiError(400, 'not_a_blob', 'encKey deve ser cifrada com RSA-OAEP 2048');
+  if (!/^[A-Za-z0-9+/]+={0,2}$/.test(i.encKey) || i.encKey.length % 4 !== 0 || Buffer.from(i.encKey, 'base64').length !== 256) throw new ApiError(400, 'not_a_blob', 'encKey deve ser cifrada com RSA-OAEP 2048');
   await db.insert(schema.folderMembers).values({ folderId: id, userId: i.userId, encKey: i.encKey, keyType: 'rsa', role: i.role });
 }
 
@@ -108,6 +109,7 @@ export async function addFolderRecord(userId: string, id: string, i: { recordId:
   requireRole(role, 'editor');
   const a = await resolveAccess(db, userId, i.recordId);
   assertPermission(a, 'edit');
+  if (!a.canShare) throw new ApiError(403, 'forbidden', 'Você não pode compartilhar este registro');
   if (await db.query.folderRecords.findFirst({ where: and(eq(schema.folderRecords.folderId, id), eq(schema.folderRecords.recordId, i.recordId)) })) throw new ApiError(409, 'already_in_folder', 'Registro já está na pasta');
   await db.insert(schema.folderRecords).values({ folderId: id, recordId: i.recordId, encKey: i.encKey });
 }
