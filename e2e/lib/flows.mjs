@@ -1,4 +1,11 @@
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import { tid } from './browser.mjs';
+
+// The unpacked extension's fixed id (extension/key.json pins it through the manifest's `key`).
+export function extensionId() {
+  return JSON.parse(readFileSync(path.join(process.cwd(), 'extension', 'key.json'), 'utf8')).id;
+}
 
 // Registers a new account and lands on the unlocked vault. Returns the 24-word recovery phrase.
 // `onPhrase` (optional) runs while the phrase screen is showing, e.g. to take a screenshot.

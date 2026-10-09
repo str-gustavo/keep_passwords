@@ -4,7 +4,7 @@ import { mkdirSync } from 'node:fs';
 
 const AB = path.join(process.cwd(), 'node_modules', 'agent-browser', 'bin', 'agent-browser.js');
 export const tid = (id) => `[data-testid="${id}"]`;
-const headed = process.argv.includes('--headed');
+const headedFlag = process.argv.includes('--headed');
 // Tall enough that the record dialog and the settings page mostly fit without scrolling.
 const VIEWPORT = ['1440', '1000'];
 // agent-browser gives up on any action (including `wait`) after 25 s (AGENT_BROWSER_DEFAULT_TIMEOUT). Changing that
@@ -18,9 +18,12 @@ const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 
 
 const visibleExpr = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); return !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'; })()`;
 
-export function browser(session) {
+// `extension`: absolute path of an unpacked extension to load (Chrome starts with it: pass the same options on every
+// call of a session). `headed`: show this session's window even without the global --headed flag.
+export function browser(session, { extension, headed = false } = {}) {
+  const launch = [...(headed || headedFlag ? ['--headed'] : []), ...(extension ? ['--extension', extension] : [])];
   const run = (args, timeout = 60_000) => {
-    const all = ['--session', session, ...(headed ? ['--headed'] : []), ...args];
+    const all = ['--session', session, ...launch, ...args];
     try { return execFileSync(process.execPath, [AB, ...all], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout }).trim(); }
     catch (e) { throw new Error(`agent-browser ${args.join(' ')} failed: ${e.stderr || e.stdout || e.message}`); }
   };
@@ -49,6 +52,18 @@ export function browser(session) {
         pause(250);
       }
       if (Date.now() >= deadline) throw new Error(`timed out after ${ms} ms waiting for ${what}${lastError ? ` (last error: ${lastError.message})` : ''}`);
+    }
+  }
+
+  // The accessibility tree (`snapshot`) also shows what sits in closed shadow roots, which page JS cannot read.
+  function waitInSnapshot(pattern, ms = 15000, what = String(pattern)) {
+    const deadline = Date.now() + ms;
+    for (;;) {
+      let tree = '';
+      try { tree = run(['snapshot']); } catch {}
+      if (pattern.test(tree)) return tree;
+      if (Date.now() >= deadline) throw new Error(`timed out after ${ms} ms waiting for ${what} in the accessibility tree:\n${tree}`);
+      pause(300);
     }
   }
 
@@ -85,7 +100,26 @@ export function browser(session) {
       ms, `URL ${p}`,
     ),
     screenshot: (name) => run(['screenshot', path.join('e2e/screenshots', `${name}.png`)]),
-    snapshot: () => run(['snapshot']), evalJs,
+    snapshot: () => run(['snapshot']), evalJs, waitInSnapshot,
+    // Semantic locators (CDP): they reach into closed shadow roots, and their clicks are trusted input.
+    clickRole: (role, name, { exact = false } = {}) => run(['find', 'role', role, 'click', '--name', name, ...(exact ? ['--exact'] : [])]),
+    // A trusted click at viewport coordinates (CSS px).
+    clickAt: (x, y) => { run(['mouse', 'move', String(Math.round(x)), String(Math.round(y))]); run(['mouse', 'down', 'left']); run(['mouse', 'up', 'left']); },
+    fillRole: (role, name, text) => run(['find', 'role', role, 'fill', text, '--name', name]),
+    // Tabs: `tabNew` opens and switches to a tab; `tabs` lists them (the current one starts with →); `tab` switches.
+    tabNew: (url) => { const out = run(['tab', 'new', url]); run(['set', 'viewport', ...VIEWPORT]); return out; },
+    tabs: () => run(['tab', 'list']), tab: (id) => run(['tab', id]),
+    // Whether the extension `id` loaded: its popup page opens in a tab and renders.
+    probeExtension: (id) => {
+      try {
+        run(['open', `chrome-extension://${id}/popup.html`]);
+        if (!sized) { run(['set', 'viewport', ...VIEWPORT]); sized = true; }
+        waitUntil(`document.querySelector('header')?.innerText.includes('Nexus Passwords')`, 10000, 'the extension popup');
+        return true;
+      } catch {
+        return false;
+      }
+    },
     upload: (sel, file) => run(['upload', sel, file]), select: (sel, v) => run(['select', sel, v]), check: (sel) => run(['check', sel]), uncheck: (sel) => run(['uncheck', sel]),
   };
 }

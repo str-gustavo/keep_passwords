@@ -33,7 +33,9 @@ export async function startServer({ port = 3100 } = {}) {
   }
   const dir = mkdtempSync(path.join(tmpdir(), 'keep-e2e-'));
   const child = spawn(process.execPath, [NEXT, 'start', '-p', String(port)], {
-    env: { ...process.env, DATABASE_URL: '', PGLITE_DIR: dir, SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-123456', NODE_ENV: 'production' },
+    env: { ...process.env, DATABASE_URL: '', PGLITE_DIR: dir, SESSION_SECRET: 'e2e-secret-e2e-secret-e2e-secret-123456', NODE_ENV: 'production',
+      // Serves the extension scenario's test pages (app/(fixtures)/e2e-fixtures, 404 otherwise).
+      E2E_FIXTURES: '1' },
     stdio: ['ignore', 'pipe', 'pipe'], detached: process.platform !== 'win32',
   });
   activeChild = child;
