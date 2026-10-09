@@ -37,7 +37,7 @@ export function Unlock({ email, onUnlocked }: { email: string | null; onUnlocked
   return (
     <form noValidate onSubmit={onSubmit} className="space-y-4 p-4">
       <div>
-        <h1 className="text-base font-semibold text-fg">Cofre bloqueado</h1>
+        <h1 className="text-base font-semibold text-fg-strong">Cofre bloqueado</h1>
         <p className="mt-1 text-sm text-fg-muted">Digite sua senha mestra para desbloquear o cofre.</p>
         {email && <p className="mt-2 truncate text-sm font-medium text-fg">{email}</p>}
       </div>

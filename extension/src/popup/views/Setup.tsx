@@ -46,7 +46,7 @@ export function Setup({ current, onSaved, onCancel }: { current: string | null; 
   return (
     <form noValidate onSubmit={onSubmit} className="space-y-4 p-4">
       <div>
-        <h1 className="text-base font-semibold text-fg">Conectar ao servidor</h1>
+        <h1 className="text-base font-semibold text-fg-strong">Conectar ao servidor</h1>
         <p className="mt-1 text-sm text-fg-muted">Informe o endereço do Nexus Passwords da sua empresa.</p>
       </div>
       <Field

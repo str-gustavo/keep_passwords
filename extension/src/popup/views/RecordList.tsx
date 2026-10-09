@@ -132,7 +132,7 @@ function TotpCode({ id, notify }: { id: string; notify: Notify }) {
       type="button"
       onClick={() => copyFrom(async () => code.value, 'Código copiado', notify)}
       title={`Copiar código 2FA (expira em ${remaining} s)`}
-      className={cx('flex shrink-0 items-center gap-1.5 rounded-md px-1.5 py-1 hover:bg-surface-2', focusRing)}
+      className={cx('flex shrink-0 items-center gap-1.5 rounded-lg px-1.5 py-1 hover:bg-surface-2', focusRing)}
     >
       <span className="sr-only">Copiar código 2FA</span>
       <span className={cx('font-mono text-sm font-semibold tabular-nums', ending ? 'text-danger' : 'text-fg')}>{grouped(code.value)}</span>

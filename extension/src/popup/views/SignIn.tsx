@@ -57,8 +57,8 @@ export function SignIn({ serverUrl, onSignedIn, onChangeServer }: { serverUrl: s
 
   return (
     <form noValidate onSubmit={onSubmit} className="space-y-4 p-4">
-      <h1 className="text-base font-semibold text-fg">Entrar</h1>
-      <div className="flex items-center justify-between gap-2 rounded-md bg-surface-2 px-3 py-2 text-xs text-fg-muted">
+      <h1 className="text-base font-semibold text-fg-strong">Entrar</h1>
+      <div className="flex items-center justify-between gap-2 rounded-lg bg-surface-2 px-3 py-2 text-xs text-fg-muted">
         <span className="min-w-0 truncate">Servidor: <span className="text-fg">{serverUrl}</span></span>
         <Button variant="ghost" size="sm" onClick={onChangeServer} className="px-0">Alterar servidor</Button>
       </div>

@@ -24,15 +24,15 @@ const STATUS_LABEL: Record<ExtStatus, string> = {
   unlocked: 'Desbloqueado',
 };
 
-const headerFocus = 'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-header-accent';
+const headerFocus = 'outline-none focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus';
 
 function Header({ status, onLock, locking }: { status: ExtStatus | null; onLock: () => void; locking: boolean }) {
   return (
-    <header className="flex shrink-0 items-center gap-2 bg-header px-3 py-2.5 text-header-fg">
+    <header className="flex shrink-0 items-center gap-2 border-b border-border bg-surface px-3 py-2.5 text-fg-strong">
       <Logo size={24} />
-      <span className="whitespace-nowrap text-sm font-semibold">Nexus Passwords</span>
+      <span className="whitespace-nowrap text-sm font-semibold text-fg-strong">Nexus Passwords</span>
       {status && (
-        <span className={cx('whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-xs font-medium', status === 'unlocked' ? 'text-header-accent' : 'text-header-fg')}>
+        <span className={cx('whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium', status === 'unlocked' ? 'bg-success-soft text-success' : 'bg-surface-2 text-fg-muted')}>
           {STATUS_LABEL[status]}
         </span>
       )}
@@ -42,7 +42,7 @@ function Header({ status, onLock, locking }: { status: ExtStatus | null; onLock:
           type="button"
           onClick={onLock}
           disabled={locking}
-          className={cx('h-7 rounded-md border border-header-fg/40 px-2 text-xs font-medium text-header-fg hover:bg-white/10 disabled:opacity-60', headerFocus)}
+          className={cx('h-7 rounded-lg border border-border bg-surface px-2 text-xs font-medium text-fg hover:bg-surface-2 disabled:opacity-60', headerFocus)}
         >
           Bloquear
         </button>
@@ -108,7 +108,7 @@ function Vault({ state, version, refreshError, onState, onRefreshed, onChangeSer
             onClick={() => choose(x.id)}
             className={cx(
               '-mb-px flex-1 border-b-2 px-1 py-2 text-sm font-medium whitespace-nowrap outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
-              active === x.id ? 'border-primary text-fg' : 'border-transparent text-fg-muted hover:text-fg',
+              active === x.id ? 'border-primary text-primary-text' : 'border-transparent text-fg-muted hover:text-fg',
             )}
           >
             {x.label}

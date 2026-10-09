@@ -1,6 +1,6 @@
 // Small local controls styled with the Nexus tokens (the web app's components/ui/* depend on Next and are not imported).
 // Contrast: primary buttons use #071E3A on orange (≥ 4.6:1 incl. hover), every other text pair is ≥ 4.5:1; focus rings
-// are #125375 (8.3:1 on white).
+// are the brand orange.
 import type { ButtonHTMLAttributes, ComponentProps, ReactNode } from 'react';
 
 const cx = (...parts: (string | false | null | undefined)[]) => parts.filter(Boolean).join(' ');
@@ -12,30 +12,30 @@ type Size = 'sm' | 'md';
 const VARIANTS: Record<Variant, string> = {
   primary: 'bg-primary text-fg-on-primary hover:bg-primary-hover',
   secondary: 'border border-border bg-surface text-fg hover:bg-surface-2',
-  ghost: 'text-navy-light underline-offset-2 hover:underline',
+  ghost: 'text-primary-text underline-offset-2 hover:underline',
   danger: 'border border-border bg-surface text-danger hover:bg-surface-2',
 };
-const SIZES: Record<Size, string> = { sm: 'h-7 px-2 text-xs', md: 'h-9 px-3 text-sm' };
+const SIZES: Record<Size, string> = { sm: 'h-7 px-2 text-xs', md: 'h-[38px] px-3 text-sm' };
 
 export function Button({ variant = 'secondary', size = 'md', className, type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
   return (
     <button
       type={type}
-      className={cx('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md font-medium whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60', focusRing, VARIANTS[variant], SIZES[size], className)}
+      className={cx('inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg font-semibold whitespace-nowrap transition-colors disabled:cursor-not-allowed disabled:opacity-60', focusRing, VARIANTS[variant], SIZES[size], className)}
       {...props}
     />
   );
 }
 
 export const inputClass = cx(
-  'h-9 w-full rounded-md border border-fg-muted bg-surface px-3 text-sm text-fg placeholder:text-fg-muted',
+  'h-[38px] w-full rounded-lg border border-border bg-surface px-3 text-sm text-fg placeholder:text-fg-muted',
   'outline-none focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-focus',
 );
 
 export function Field({ id, label, hint, ...props }: ComponentProps<'input'> & { id: string; label: string; hint?: ReactNode }) {
   return (
     <div className="space-y-1">
-      <label htmlFor={id} className="block text-sm font-medium text-fg">{label}</label>
+      <label htmlFor={id} className="block text-sm font-medium text-fg-strong">{label}</label>
       <input id={id} className={inputClass} aria-describedby={hint ? `${id}-hint` : undefined} {...props} />
       {hint && <p id={`${id}-hint`} className="text-xs text-fg-muted">{hint}</p>}
     </div>
@@ -44,9 +44,9 @@ export function Field({ id, label, hint, ...props }: ComponentProps<'input'> & {
 
 /** Errors are announced assertively (role=alert); confirmations politely (role=status). */
 export function Notice({ kind, children }: { kind: 'error' | 'success' | 'info'; children: ReactNode }) {
-  const tone = { error: 'border-danger/30 bg-[#FEF2F2] text-danger', success: 'border-success/30 bg-[#F0FDF4] text-success', info: 'border-border bg-surface-2 text-fg' }[kind];
+  const tone = { error: 'border-danger/20 bg-danger-soft text-danger', success: 'border-success/20 bg-success-soft text-success', info: 'border-border bg-surface-2 text-fg' }[kind];
   return (
-    <p role={kind === 'error' ? 'alert' : 'status'} className={cx('rounded-md border px-3 py-2 text-sm', tone)}>
+    <p role={kind === 'error' ? 'alert' : 'status'} className={cx('rounded-lg border px-3 py-2 text-sm', tone)}>
       {children}
     </p>
   );

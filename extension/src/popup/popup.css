@@ -1,16 +1,16 @@
 @import "../ui/tokens.css";
 
 /*
- * Popup-only tokens, aligned with the web app's app/globals.css; tests/popup-contrast.test.ts checks them for AA
+ * Popup-only tokens, aligned with the web app's light palette; tests/popup-contrast.test.ts checks them for AA
  * (>= 4.5:1). Text on solid orange comes from tokens.css (fg-on-primary #071E3A: 5.6:1 on #FA681F, 4.6:1 on the hover).
- * - the header is the app's navy sidebar: #F3F5F7 text (13:1) and the #FFB38A accent (8.3:1);
- * - focus rings use #125375 on light surfaces (8.3:1 against white) and the accent on the navy header.
+ * - the header is white with a bottom border: navy text (#0D2A4D, 14:1) and the dark-orange accent (#B0440E, 5.7:1);
+ * - focus rings are the brand orange #FA681F (a non-text indicator, >= 3:1 on white).
  */
 @theme {
-  --color-header: #0D2A4D;
-  --color-header-fg: #F3F5F7;
-  --color-header-accent: #FFB38A;
-  --color-focus: #125375;
+  --color-header: #FFFFFF;
+  --color-header-fg: #0D2A4D;
+  --color-header-accent: #B0440E;
+  --color-focus: #FA681F;
 }
 
 @layer base {
