@@ -27,7 +27,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <VaultPreview className="w-[86%] max-w-[560px] rounded-xl shadow-[0_24px_60px_rgba(0,0,0,.35)]" />
         <div className="max-w-md">
           <p className="text-lg font-semibold text-white">{t.heroTitle}</p>
-          <p className="mt-2 text-sm text-[#DCE6F0]">{t.heroBody}</p>
+          <p className="mt-2 text-sm text-rail-fg/85">{t.heroBody}</p>
         </div>
       </aside>
     </main>
