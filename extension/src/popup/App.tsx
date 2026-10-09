@@ -30,9 +30,9 @@ function Header({ status, onLock, locking }: { status: ExtStatus | null; onLock:
   return (
     <header className="flex shrink-0 items-center gap-2 bg-header px-3 py-2.5 text-header-fg">
       <Logo size={24} />
-      <span className="text-sm font-semibold">Nexus Passwords</span>
+      <span className="whitespace-nowrap text-sm font-semibold">Nexus Passwords</span>
       {status && (
-        <span className={cx('rounded-full bg-white/10 px-2 py-0.5 text-xs font-medium', status === 'unlocked' ? 'text-header-accent' : 'text-header-fg')}>
+        <span className={cx('whitespace-nowrap rounded-full bg-white/10 px-2 py-0.5 text-xs font-medium', status === 'unlocked' ? 'text-header-accent' : 'text-header-fg')}>
           {STATUS_LABEL[status]}
         </span>
       )}
