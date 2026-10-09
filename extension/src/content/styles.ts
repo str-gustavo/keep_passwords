@@ -4,8 +4,9 @@
  * always the navy surface, whatever the site's theme. Every text pair here is AA (≥ 4.5:1, tests/content.test.ts).
  *
  * Shadow-cascade note: for !important declarations the shadow tree wins over the page, so `:host` pins the host's
- * look with !important — but never top/left/width, which the script sets as inline !important styles (an inner
- * `:host` !important would override them).
+ * look with !important — but never top/left/width of the icon and the menu, which the script sets as inline
+ * !important styles (an inner `:host` !important would override them). The save bar's place is fixed, so its `:host`
+ * pins it.
  */
 export const PALETTE = {
   navy: '#0D2A4D',
@@ -20,6 +21,9 @@ export const PALETTE = {
   muted: '#B8C4D0',
   border: '#1E4A73',
   danger: '#F87171',
+  white: '#FFFFFF',
+  /** The save bar's "Salvo!" (white text, AA). */
+  success: '#15803D',
 } as const;
 
 const P = PALETTE;
@@ -117,5 +121,36 @@ export const TOAST_CSS = `${HOST}
 .btn.secondary:hover { background: ${P.navyLight}; }
 .msg { display: block; margin: 8px 0 0; color: ${P.fg}; }
 .status { display: block; min-height: 1.4em; margin-top: 8px; color: ${P.muted}; font-size: 12px; }
+.status.error { color: ${P.danger}; }
+`;
+
+export const BAR_CSS = `${HOST}
+:host { position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: auto !important; width: auto !important; height: auto !important; }
+.bar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 16px;
+  background: ${P.navy}; color: ${P.white}; border-bottom: 1px solid ${P.border};
+  box-shadow: 0 6px 20px rgba(7, 30, 58, .35); outline: none;
+}
+.bar.saved { background: ${P.success}; border-bottom-color: ${P.success}; justify-content: center; }
+.mark { display: block; line-height: 0; }
+.text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0; }
+.question { display: block; margin: 0; font-size: 14px; font-weight: 600; color: ${P.white}; }
+.detail { display: block; margin: 0; color: ${P.muted}; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.title {
+  all: unset; box-sizing: border-box; flex: 0 1 240px; min-width: 120px; height: 32px; padding: 0 10px; border-radius: 8px;
+  background: ${P.navyLight}; color: ${P.fg}; box-shadow: inset 0 0 0 1px ${P.border}; font: inherit; cursor: text;
+}
+.title:focus-visible { outline: 2px solid ${P.orangeOnNavy}; outline-offset: 1px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.btn { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 14px; border-radius: 8px; font-weight: 600; white-space: nowrap; }
+.btn.primary { background: ${P.orange}; color: ${P.onOrange}; }
+.btn.primary:hover { background: ${P.orangeHover}; }
+.btn.secondary { color: ${P.orangeOnNavy}; box-shadow: inset 0 0 0 1px ${P.orangeOnNavy}; }
+.btn.secondary:hover { background: ${P.navyLight}; }
+.btn.link { padding: 0 6px; color: ${P.orangeOnNavy}; font-weight: 400; text-decoration: underline; }
+.btn[aria-disabled="true"] { cursor: progress; opacity: .6; }
+.status { display: block; flex-basis: 100%; margin: 0; color: ${P.fg}; font-size: 12px; }
+/* Empty: out of the layout, still in the accessibility tree (a live region must exist before its text changes). */
+.status:empty { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 .status.error { color: ${P.danger}; }
 `;

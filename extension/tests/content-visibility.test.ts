@@ -7,7 +7,7 @@ import { send } from '@/shared/messages';
 import { ContentScript } from '@/content/controller';
 import { allowSyntheticEvents, createOverlay, engineReportsHidden, overlayVisible, removeOverlay, shadowOf } from '@/content/host';
 import { hideToast, showTotpToast } from '@/content/toast';
-import { ICON_CSS, MENU_CSS, TOAST_CSS } from '@/content/styles';
+import { BAR_CSS, ICON_CSS, MENU_CSS, TOAST_CSS } from '@/content/styles';
 import { resetChromeMock } from './helpers/chrome-mock';
 
 const sendMock = vi.mocked(send);
@@ -72,7 +72,7 @@ function start(): void {
 
 describe(':host hardening', () => {
   it('pins every property a page could use to hide a clickable overlay', () => {
-    for (const css of [ICON_CSS, MENU_CSS, TOAST_CSS]) {
+    for (const css of [ICON_CSS, MENU_CSS, TOAST_CSS, BAR_CSS]) {
       for (const decl of ['mask: none', '-webkit-mask: none', 'mix-blend-mode: normal', 'zoom: 1', 'translate: none', 'scale: none',
         'rotate: none', 'clip: auto', 'content-visibility: visible', 'opacity: 1', 'filter: none', 'transform: none', 'clip-path: none']) {
         expect(css).toContain(`${decl} !important`);

@@ -2,6 +2,7 @@
 // Built as a classic-script IIFE (vite.content.config.ts): no import/export survives bundling.
 import { startContentScript } from './controller';
 import { installFillGenerated } from './fill-generated';
+import { startSaveFlow } from './save-bar';
 
 // Once per frame, even if the script is injected again into the same isolated world.
 const STARTED = '__nexusPasswordsContent';
@@ -10,4 +11,5 @@ if (!scope[STARTED]) {
   scope[STARTED] = true;
   startContentScript(document);
   installFillGenerated(document);
+  startSaveFlow(document);
 }

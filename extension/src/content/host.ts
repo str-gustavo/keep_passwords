@@ -3,7 +3,7 @@
  * `document.documentElement` (not body: survives sites that replace <body>). The page sees only the empty host; it cannot
  * reach the shadow tree, and events from inside it are retargeted to the host.
  */
-export type OverlayTag = 'nexus-passwords-icon' | 'nexus-passwords-menu' | 'nexus-passwords-toast';
+export type OverlayTag = 'nexus-passwords-icon' | 'nexus-passwords-menu' | 'nexus-passwords-toast' | 'nexus-passwords-bar';
 
 export interface Overlay {
   readonly host: HTMLElement;
