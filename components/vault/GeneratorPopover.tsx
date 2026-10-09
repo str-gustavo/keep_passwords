@@ -64,16 +64,16 @@ export function GeneratorPopover({ onPick }: { onPick: (password: string) => voi
     >
       <IconButton
         data-testid="generate-password" label={t.generatePassword} title={t.generatePassword}
-        aria-haspopup="dialog" aria-expanded={open} onClick={toggleOpen} className="h-10 w-10 border border-border"
+        aria-haspopup="dialog" aria-expanded={open} onClick={toggleOpen} className="h-[38px] w-[38px] border border-border"
       >
         <WandSparkles className="h-4 w-4" aria-hidden="true" />
       </IconButton>
       {open && (
         <div
           role="dialog" aria-label={t.generatePassword}
-          className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-border bg-surface p-4 shadow-xl"
+          className="absolute right-0 top-full z-30 mt-2 w-72 rounded-xl border border-border bg-surface p-4 shadow-float"
         >
-          <p className="min-h-10 select-all break-all rounded-lg bg-surface-2 px-3 py-2 font-mono text-sm text-fg">{value}</p>
+          <p className="min-h-[38px] select-all break-all rounded-lg border border-border bg-surface-2 px-3 py-2 font-mono text-sm text-fg-strong">{value}</p>
           <StrengthMeter password={value} />
           <div className="mt-3 flex items-center justify-between gap-3">
             <Label htmlFor={lengthId} className="mb-0">{t.genLength}</Label>
@@ -88,7 +88,7 @@ export function GeneratorPopover({ onPick }: { onPick: (password: string) => voi
           </div>
           <div className="mt-1 divide-y divide-border">
             {CLASSES.map((c) => (
-              <label key={c.key} className="flex cursor-pointer items-center justify-between gap-3 py-2 text-xs text-fg">
+              <label key={c.key} className="flex cursor-pointer items-center justify-between gap-3 py-2 text-[13px] text-fg">
                 <span>{c.label}</span>
                 <Switch checked={opts[c.key]} onChange={(v) => toggleClass(c.key, v)} label={c.label} />
               </label>

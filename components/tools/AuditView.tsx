@@ -70,7 +70,7 @@ export function AuditView() {
 
   return (
     <ToolLayout icon={ShieldCheck} title={t.audit} description={t.auditSubtitle}>
-      <section aria-labelledby="audit-score-title" className="flex flex-col items-center gap-6 rounded-xl border border-border bg-surface p-4 shadow-sm sm:flex-row sm:p-6">
+      <section aria-labelledby="audit-score-title" className="flex flex-col items-center gap-6 rounded-xl border border-border bg-surface p-4 sm:flex-row sm:p-6">
         <div className="relative h-36 w-36 shrink-0">
           <svg viewBox="0 0 120 120" className="h-full w-full -rotate-90" aria-hidden="true">
             <circle cx="60" cy="60" r={RING_RADIUS} fill="none" strokeWidth="10" className="stroke-border" />
@@ -88,28 +88,28 @@ export function AuditView() {
             />
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span data-testid="audit-score" className="text-4xl font-bold tabular-nums text-fg">{report.score}</span>
+            <span data-testid="audit-score" className="text-4xl font-semibold tabular-nums text-fg-strong">{report.score}</span>
             <span className="text-xs text-fg-muted">{t.auditOutOf}</span>
           </div>
         </div>
         <div className="w-full min-w-0 flex-1 text-center sm:text-left">
-          <h2 id="audit-score-title" className="text-lg font-semibold text-fg">{t.auditScore}</h2>
+          <h2 id="audit-score-title" className="text-base font-semibold text-fg-strong">{t.auditScore}</h2>
           <p className="mt-1 text-sm font-medium text-fg">{report.totalPasswords === 0 ? t.auditNoPasswords : scoreMessage(report.score)}</p>
           <p className="mt-1 text-xs text-fg-muted">{t.auditAnalyzed(report.totalPasswords)}</p>
           <dl className="mt-4 grid grid-cols-3 gap-2">
             {stats.map((s) => (
-              <div key={s.label} className="rounded-lg bg-surface-2 px-3 py-2">
+              <div key={s.label} className="rounded-lg border border-border px-3 py-2">
                 <dt className="text-xs leading-tight text-fg-muted">{s.label}</dt>
-                <dd className={cn('text-xl font-semibold tabular-nums', s.value > 0 ? 'text-fg' : 'text-success')}>{s.value}</dd>
+                <dd className={cn('text-xl font-semibold tabular-nums', s.value > 0 ? 'text-fg-strong' : 'text-success')}>{s.value}</dd>
               </div>
             ))}
           </dl>
         </div>
       </section>
 
-      <AuditList id="audit-weak" testId="audit-weak" title={t.auditWeak} hint={t.auditWeakHint} icon={ShieldAlert} rows={rows.weak} onOpen={open} />
-      <AuditList id="audit-reused" testId="audit-reused" title={t.auditReused} hint={t.auditReusedHint} icon={Repeat} rows={rows.reused} onOpen={open} />
-      <AuditList id="audit-old" testId="audit-old" title={t.auditOld} hint={t.auditOldHint} icon={Clock} rows={rows.old} onOpen={open} />
+      <AuditList id="audit-weak" testId="audit-weak" title={t.auditWeak} hint={t.auditWeakHint} icon={ShieldAlert} severity="danger" rows={rows.weak} onOpen={open} />
+      <AuditList id="audit-reused" testId="audit-reused" title={t.auditReused} hint={t.auditReusedHint} icon={Repeat} severity="danger" rows={rows.reused} onOpen={open} />
+      <AuditList id="audit-old" testId="audit-old" title={t.auditOld} hint={t.auditOldHint} icon={Clock} severity="primary" rows={rows.old} onOpen={open} />
     </ToolLayout>
   );
 }

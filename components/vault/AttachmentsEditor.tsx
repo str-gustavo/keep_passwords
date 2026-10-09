@@ -70,8 +70,8 @@ export function AttachmentsEditor({ recordId, attachments, onBusyChange, onDelet
 
   if (!recordId) {
     return (
-      <p className="flex items-center gap-2 rounded-lg border border-dashed border-border bg-surface-2 px-3 py-3 text-sm text-fg-muted">
-        <Info className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />{t.attachmentsSaveFirst}
+      <p className="flex items-center gap-2 rounded-lg border border-dashed border-border px-3 py-3 text-sm text-fg-muted">
+        <Info className="h-4 w-4 shrink-0" aria-hidden="true" />{t.attachmentsSaveFirst}
       </p>
     );
   }
@@ -119,11 +119,11 @@ export function AttachmentsEditor({ recordId, attachments, onBusyChange, onDelet
         <label
           htmlFor={INPUT_ID}
           className={cn(
-            'flex cursor-pointer flex-col items-center gap-1 rounded-xl border-2 border-dashed px-4 py-5 text-center transition peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40',
-            dragging ? 'border-primary bg-primary-soft' : 'border-border bg-surface-2 hover:border-primary',
+            'flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors peer-focus-visible:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40',
+            dragging ? 'border-primary bg-primary-soft' : 'border-border bg-surface hover:bg-surface-2',
           )}
         >
-          <Upload className="h-5 w-5 text-primary" aria-hidden="true" />
+          <Upload className="h-5 w-5 text-fg-muted" aria-hidden="true" />
           <span className="text-sm font-medium text-fg">{t.attachmentsDrop}</span>
           <span className="text-xs text-fg-muted">{t.attachmentsLimit}</span>
         </label>

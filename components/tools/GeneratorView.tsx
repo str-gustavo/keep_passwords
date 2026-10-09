@@ -40,7 +40,7 @@ const SEPARATORS = [
 ];
 
 const clampLength = (n: number) => Math.min(LENGTH_MAX, Math.max(LENGTH_MIN, Math.round(n)));
-const card = 'rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6';
+const card = 'rounded-xl border border-border bg-surface p-4 sm:p-6';
 const optionRow = 'flex cursor-pointer items-center justify-between gap-4 py-3 text-sm text-fg';
 const slider = 'h-2 min-w-0 flex-1 cursor-pointer accent-primary';
 
@@ -91,7 +91,7 @@ export function GeneratorView() {
 
   return (
     <ToolLayout icon={WandSparkles} title={t.generator} description={t.generatorSubtitle}>
-      <div role="group" aria-label={t.genMode} className="inline-flex rounded-lg border border-border bg-surface p-1 shadow-sm">
+      <div role="group" aria-label={t.genMode} className="inline-flex rounded-lg border border-border bg-surface p-1">
         {MODES.map((m) => (
           <button
             key={m.id}
@@ -99,7 +99,7 @@ export function GeneratorView() {
             data-testid={`gen-mode-${m.id}`}
             aria-pressed={mode === m.id}
             onClick={() => setMode(m.id)}
-            className={cn('rounded-md px-4 py-1.5 text-sm font-medium outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40', mode === m.id ? 'bg-primary text-fg-on-primary' : 'text-fg-muted hover:bg-primary-soft hover:text-fg')}
+            className={cn('rounded-md px-4 py-1.5 text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40', mode === m.id ? 'bg-primary-soft text-primary-text' : 'text-fg-muted hover:bg-surface-2 hover:text-fg')}
           >
             {m.label}
           </button>
@@ -107,8 +107,8 @@ export function GeneratorView() {
       </div>
 
       <section aria-labelledby="gen-output-title" className={card}>
-        <h2 id="gen-output-title" className="text-xs font-medium uppercase tracking-wide text-fg-muted">{t.genGenerated}</h2>
-        <p data-testid="gen-output" className="mt-2 min-h-7 select-all break-all font-mono text-lg text-fg">{output}</p>
+        <h2 id="gen-output-title" className="text-xs font-medium text-fg-muted">{t.genGenerated}</h2>
+        <p data-testid="gen-output" className="mt-2 min-h-7 select-all break-all font-mono text-lg text-fg-strong">{output}</p>
         <PasswordStrengthMeter password={output} />
         <div className="mt-4 flex flex-wrap gap-2">
           <Button data-testid="gen-copy" onClick={onCopy} disabled={!output}>
@@ -121,7 +121,7 @@ export function GeneratorView() {
       </section>
 
       <section aria-labelledby="gen-options-title" className={card}>
-        <h2 id="gen-options-title" className="text-base font-semibold text-fg">{t.genOptions}</h2>
+        <h2 id="gen-options-title" className="text-sm font-semibold text-fg-strong">{t.genOptions}</h2>
         {mode === 'password' ? (
           <>
             <div className="mt-4">

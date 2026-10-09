@@ -13,6 +13,9 @@ import { t } from '@/lib/i18n/pt-br';
 import { validatePasswordChange, type PasswordChangeErrors } from '@/lib/settings/validation';
 import { changeMasterPassword } from '@/lib/vault/actions';
 
+/** A white notice with an orange edge, like the toasts (no tinted fill). */
+const notice = 'rounded-lg border border-border border-l-[3px] border-l-primary bg-surface px-3 py-2 text-sm text-fg';
+
 /**
  * Re-derives the account keys for a new master password and rotates the recovery phrase. The new phrase is shown
  * once in a dialog; if that dialog is dismissed before "Concluir", a notice offers to reopen it, because the old
@@ -78,14 +81,14 @@ export function ChangePasswordForm({ email }: { email: string }) {
         <Field label={t.confirmNewPassword} htmlFor="settings-new-password-confirm" error={errors.confirm}>
           <Input id="settings-new-password-confirm" data-testid="settings-new-password-confirm" type="password" autoComplete="new-password" value={confirm} onChange={(e) => setConfirm(e.target.value)} aria-invalid={!!errors.confirm} readOnly={busy} />
         </Field>
-        {formError && <p role="alert" className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm text-danger">{formError}</p>}
+        {formError && <p role="alert" className="rounded-lg border border-danger/30 bg-danger-soft px-3 py-2 text-sm text-danger">{formError}</p>}
         <Button type="submit" data-testid="settings-change-password" loading={busy}>
           {!busy && <KeyRound className="h-4 w-4" aria-hidden="true" />}{t.changeMasterPassword}
         </Button>
       </form>
 
       {phrase !== null && !phraseOpen && (
-        <div role="status" className="mt-4 flex max-w-md flex-wrap items-center gap-3 rounded-lg border border-primary/30 bg-primary-soft px-3 py-2 text-sm text-fg">
+        <div role="status" className={`mt-4 flex max-w-md flex-wrap items-center gap-3 ${notice}`}>
           <span className="min-w-0 flex-1">{t.pendingPhraseNotice}</span>
           <Button type="button" variant="secondary" size="sm" onClick={() => setPhraseOpen(true)}>{t.showRecoveryPhrase}</Button>
         </div>
@@ -93,7 +96,7 @@ export function ChangePasswordForm({ email }: { email: string }) {
 
       {phrase !== null && (
         <Dialog open={phraseOpen} onClose={() => setPhraseOpen(false)} title={t.newRecoveryPhraseTitle}>
-          <p className="mb-4 rounded-lg border border-primary/30 bg-primary-soft px-3 py-2 text-sm text-fg">{t.passwordChangedNotice}</p>
+          <p className={`mb-4 ${notice}`}>{t.passwordChangedNotice}</p>
           <RecoveryPhraseView phrase={phrase} onContinue={finish} continueLabel={t.finish} />
         </Dialog>
       )}

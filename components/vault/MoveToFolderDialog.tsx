@@ -13,7 +13,7 @@ import { folderTree } from '@/lib/vault/selectors';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 
 const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : t.actionFailed);
-const sectionTitle = 'mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted';
+const sectionTitle = 'mb-2 text-sm font-semibold text-fg-strong';
 
 /**
  * Personal placement (one folder or none) applies to the caller's own copy of the record, so it is offered only

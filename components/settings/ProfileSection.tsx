@@ -18,7 +18,8 @@ export function ProfileSection({ formId, email, name, nameError, saving, onNameC
           <Input id="settings-name" data-testid="settings-name" autoComplete="name" maxLength={120} value={name} onChange={(e) => onNameChange(e.target.value)} aria-invalid={!!nameError} readOnly={saving} />
         </Field>
         <Field label={t.email} htmlFor="settings-email">
-          <Input id="settings-email" type="email" value={email} readOnly aria-describedby="settings-email-hint" className="bg-surface-2 text-fg-muted focus:border-border focus:ring-0" />
+          {/* Read-only but still focusable, so it keeps the Input's focus ring for keyboard users. */}
+          <Input id="settings-email" type="email" value={email} readOnly aria-describedby="settings-email-hint" className="bg-surface-2 text-fg-muted" />
           <p id="settings-email-hint" className="mt-1 text-xs text-fg-muted">{t.settingsEmailReadOnly}</p>
         </Field>
         <Button type="submit" data-testid="settings-save" loading={saving}>{t.settingsSaveChanges}</Button>

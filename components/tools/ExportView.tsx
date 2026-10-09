@@ -55,7 +55,7 @@ export function ExportView() {
 
   return (
     <ToolLayout icon={Download} title={t.exportVault} description={t.exportSubtitle}>
-      <section role="note" aria-labelledby="export-warning-title" className="flex items-start gap-3 rounded-xl border border-danger/40 bg-danger/5 p-4 sm:p-5">
+      <section role="note" aria-labelledby="export-warning-title" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 sm:p-5">
         <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-danger" aria-hidden="true" />
         <div>
           <h2 id="export-warning-title" className="text-sm font-semibold text-danger">{t.exportWarningTitle}</h2>
@@ -63,8 +63,8 @@ export function ExportView() {
         </div>
       </section>
 
-      <section className="rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6">
-        <p className="text-sm font-medium text-fg">{rows.length > 0 ? t.exportCount(rows.length) : t.exportNothing}</p>
+      <section className="rounded-xl border border-border bg-surface p-4 sm:p-6">
+        <p className="text-sm font-semibold text-fg-strong">{rows.length > 0 ? t.exportCount(rows.length) : t.exportNothing}</p>
         <p className="mt-1 text-xs text-fg-muted">{t.exportAttachmentsNote}</p>
 
         <div className="mt-5 flex items-center gap-2">

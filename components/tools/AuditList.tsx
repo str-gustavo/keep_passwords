@@ -1,26 +1,31 @@
 'use client';
 import { ChevronRight, type LucideIcon } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
 import { TypeIcon } from '@/components/vault/TypeIcon';
 import { t } from '@/lib/i18n/pt-br';
 import type { RecordTypeId } from '@/lib/record-types/catalog';
-import { cn } from '@/lib/ui/cn';
 
 export interface AuditRow { key: string; recordId: string; title: string; type: RecordTypeId; reason: string; strength: { score: number; label: string } }
 
-const pill = 'inline-flex shrink-0 items-center rounded-full px-2 py-0.5 text-xs font-medium';
-const TONE = { bad: 'bg-danger/10 text-danger', fair: 'bg-primary-soft text-primary-text', good: 'bg-success/10 text-success' } as const;
-const strengthTone = (score: number) => (score <= 1 ? TONE.bad : score >= 3 ? TONE.good : TONE.fair);
+/** How bad a non-empty list is: `danger` for weak and reused passwords, `primary` for old ones. */
+export type AuditSeverity = 'danger' | 'primary';
 
-export function AuditList({ id, testId, title, hint, icon: Icon, rows, onOpen }: { id: string; testId: string; title: string; hint: string; icon: LucideIcon; rows: AuditRow[]; onOpen: (recordId: string) => void }) {
+/** A row's strength label: weak (0–1) danger, fair (2) primary, strong (3–4) neutral. */
+const strengthTone = (score: number) => (score <= 1 ? 'danger' : score === 2 ? 'primary' : 'neutral');
+
+export function AuditList({ id, testId, title, hint, icon: Icon, severity, rows, onOpen }: {
+  id: string; testId: string; title: string; hint: string; icon: LucideIcon; severity: AuditSeverity; rows: AuditRow[]; onOpen: (recordId: string) => void;
+}) {
   return (
-    <section aria-labelledby={`${id}-title`} data-testid={testId} className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+    <section aria-labelledby={`${id}-title`} data-testid={testId} className="overflow-hidden rounded-xl border border-border bg-surface">
       <header className="flex items-start gap-3 border-b border-border px-4 py-3">
-        <Icon className={cn('mt-0.5 h-5 w-5 shrink-0', rows.length > 0 ? 'text-primary' : 'text-success')} aria-hidden="true" />
+        <Icon className="mt-0.5 h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
         <div className="min-w-0 flex-1">
-          <h2 id={`${id}-title`} className="text-sm font-semibold text-fg">{title}</h2>
+          <h2 id={`${id}-title`} className="text-sm font-semibold text-fg-strong">{title}</h2>
           <p className="text-xs text-fg-muted">{hint}</p>
         </div>
-        <span className={cn(pill, rows.length > 0 ? TONE.fair : TONE.good)}>{rows.length}</span>
+        {/* An empty list is fine: neutral count. */}
+        <Badge tone={rows.length > 0 ? severity : 'neutral'} className="shrink-0 tabular-nums">{rows.length}</Badge>
       </header>
       {rows.length === 0 ? (
         <p className="px-4 py-6 text-center text-sm text-fg-muted">{t.auditNoneFound}</p>
@@ -34,14 +39,14 @@ export function AuditList({ id, testId, title, hint, icon: Icon, rows, onOpen }:
                 onClick={() => onOpen(r.recordId)}
                 className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
               >
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-fg-muted">
                   <TypeIcon type={r.type} className="h-4 w-4" />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="block truncate text-sm font-medium text-fg">{r.title || t.untitled}</span>
                   <span className="block truncate text-xs text-fg-muted">{r.reason}</span>
                 </span>
-                <span className={cn(pill, strengthTone(r.strength.score))}>{r.strength.label}</span>
+                <Badge tone={strengthTone(r.strength.score)} className="shrink-0">{r.strength.label}</Badge>
                 <ChevronRight className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
               </button>
             </li>

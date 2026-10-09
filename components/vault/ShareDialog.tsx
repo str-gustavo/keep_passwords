@@ -27,7 +27,7 @@ const asGrant = (v: string): Grant => (v === 'edit' ? 'edit' : 'view');
 // Server messages (404 "Nenhuma conta com este e-mail", 409 "Já compartilhado com este usuário", 403 delegate cap) are pt-BR.
 const errorText = (e: unknown) => (e instanceof ApiClientError ? e.message : t.actionFailed);
 const permissionLabel = (p: ShareDto['permission']) => (p === 'view' ? t.sharePermissionView : t.sharePermissionEdit);
-const sectionTitle = 'text-xs font-semibold uppercase tracking-wide text-fg-muted';
+const sectionTitle = 'text-sm font-semibold text-fg-strong';
 
 /**
  * Shares one record with other accounts (owner or `canShare` users only; `detail-share` is gated on that).
@@ -144,8 +144,8 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
         footer={<Button variant="secondary" onClick={onClose}>{t.finish}</Button>}
       >
         <div className="space-y-5">
-          <div className="flex items-center gap-3 rounded-lg bg-surface-2 p-3">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+          <div className="flex items-center gap-3 rounded-lg border border-border p-3">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-surface-2 text-fg-muted">
               <TypeIcon type={typeDef.id} className="h-4 w-4" />
             </span>
             <div className="min-w-0">
@@ -174,7 +174,7 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
                   <option value="edit" disabled={!editAllowed}>{t.sharePermissionEdit}</option>
                 </Select>
               </div>
-              <label className="flex h-10 cursor-pointer items-center gap-2 text-sm text-fg">
+              <label className="flex h-[38px] cursor-pointer items-center gap-2 text-sm text-fg">
                 <Switch checked={canShare} onChange={setCanShare} label={t.shareCanShare} testId="share-can-share" />
                 <span>{t.shareCanShare}</span>
               </label>
@@ -225,7 +225,7 @@ export function ShareDialog({ open, onClose, record }: { open: boolean; onClose:
                   const name = folders.find((f) => f.id === link.folderId)?.name;
                   return (
                     <li key={link.folderId} data-testid={`share-folder-${link.folderId}`} className="flex flex-wrap items-center gap-3 px-3 py-3">
-                      <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-primary">
+                      <span aria-hidden="true" className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-fg-muted">
                         <Users className="h-4 w-4" />
                       </span>
                       <div className="min-w-0 flex-1">
@@ -269,7 +269,7 @@ function ShareRow({ share: s, self, busy, manageable, editAllowed, onChange, onR
   const initial = (s.name.trim() || s.email).charAt(0).toUpperCase();
   return (
     <li data-testid={`share-row-${s.userId}`} className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-2 px-3 py-3">
-      <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-sm font-semibold text-primary-text">{initial}</span>
+      <span aria-hidden="true" className="flex h-8 w-8 items-center justify-center rounded-full bg-surface-2 text-sm font-semibold text-fg-strong">{initial}</span>
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-sm font-medium text-fg">
           <span className="truncate">{s.name.trim() || s.email}</span>

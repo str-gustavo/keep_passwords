@@ -31,7 +31,7 @@ export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]
 
   return (
     <section aria-labelledby="record-custom-title" className="space-y-3">
-      <h3 id="record-custom-title" className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{t.customFields}</h3>
+      <h3 id="record-custom-title" className="text-sm font-semibold text-fg-strong">{t.customFields}</h3>
       {fields.length > 0 && (
         <ul className="space-y-2">
           {fields.map((c, i) => {
@@ -39,7 +39,7 @@ export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]
             const valueId = `record-custom-value-${i}`;
             const name = c.label.trim() || `${t.customField} ${i + 1}`;
             return (
-              <li key={rowIds[i]} className="grid gap-2 rounded-lg border border-border bg-surface-2 p-3 sm:grid-cols-[minmax(0,1fr)_7.5rem_minmax(0,1.3fr)_auto] sm:items-end">
+              <li key={rowIds[i]} className="grid gap-2 rounded-lg border border-border bg-surface p-3 sm:grid-cols-[minmax(0,1fr)_7.5rem_minmax(0,1.3fr)_auto] sm:items-end">
                 <div>
                   <Label htmlFor={labelId(i)}>{t.customFieldLabel}</Label>
                   <Input id={labelId(i)} data-testid={`custom-label-${i}`} value={c.label} maxLength={200} autoComplete="off" onChange={(e) => set({ label: e.target.value })} />
@@ -59,7 +59,7 @@ export function CustomFieldsEditor({ fields, dispatch }: { fields: CustomField[]
                     <Input id={valueId} data-testid={`custom-value-${i}`} value={c.value} autoComplete="off" onChange={(e) => set({ value: e.target.value })} />
                   )}
                 </div>
-                <IconButton label={`${t.removeCustomField} ${name}`} title={t.removeCustomField} tone="danger" onClick={() => remove(i)} className="h-10 w-10 justify-self-end">
+                <IconButton label={`${t.removeCustomField} ${name}`} title={t.removeCustomField} tone="danger" onClick={() => remove(i)} className="h-[38px] w-[38px] justify-self-end">
                   <Trash2 className="h-4 w-4" aria-hidden="true" />
                 </IconButton>
               </li>

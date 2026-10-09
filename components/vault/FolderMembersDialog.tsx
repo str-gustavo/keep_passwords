@@ -18,7 +18,6 @@ import { useVault, type VaultFolder } from '@/lib/vault/store';
 import { ConfirmDialog } from './ConfirmDialog';
 
 const ROLE_LABEL: Record<MemberDto['role'], string> = { owner: t.roleOwner, admin: t.roleAdmin, editor: t.roleEditor, viewer: t.roleViewer };
-const roleTag = 'inline-flex items-center rounded-full border border-border px-2 py-0.5 text-xs font-medium text-fg-muted';
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : t.actionFailed);
 const initialsOf = (m: MemberDto) => (m.name.trim().split(/\s+/).slice(0, 2).map((w) => w[0] ?? '').join('') || m.email[0] || '?').toUpperCase();
@@ -132,15 +131,15 @@ export function FolderMembersDialog({ open, onClose, folder }: { open: boolean; 
           )}
           {members && (
             <section aria-label={t.members}>
-              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted">{t.memberCount(members.length)}</p>
-              <ul className="divide-y divide-border rounded-xl border border-border">
+              <p className="mb-2 text-sm font-semibold text-fg-strong">{t.memberCount(members.length)}</p>
+              <ul className="divide-y divide-border rounded-lg border border-border">
                 {members.map((m) => {
                   const self = m.userId === me;
                   const manageable = isAdmin && m.role !== 'owner' && !self;
                   const busy = busyUser === m.userId;
                   return (
                     <li key={m.userId} data-testid={`member-row-${m.userId}`} className="flex items-center gap-3 px-3 py-2.5">
-                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-soft text-xs font-semibold text-primary-text" aria-hidden="true">{initialsOf(m)}</span>
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-surface-2 text-xs font-semibold text-fg-strong" aria-hidden="true">{initialsOf(m)}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-medium text-fg">{m.name || m.email}{self && <span className="font-normal text-fg-muted"> ({t.you})</span>}</p>
                         <p className="truncate text-xs text-fg-muted" title={m.email}>{m.email}</p>
@@ -164,7 +163,7 @@ export function FolderMembersDialog({ open, onClose, folder }: { open: boolean; 
                           </Button>
                         </div>
                       ) : (
-                        m.role === 'owner' ? <Badge tone="primary">{ROLE_LABEL.owner}</Badge> : <span className={roleTag}>{ROLE_LABEL[m.role]}</span>
+                        <Badge tone={m.role === 'owner' ? 'primary' : 'neutral'} className="shrink-0">{ROLE_LABEL[m.role]}</Badge>
                       )}
                     </li>
                   );
@@ -174,8 +173,8 @@ export function FolderMembersDialog({ open, onClose, folder }: { open: boolean; 
           )}
 
           {isAdmin ? (
-            <form id={formId} noValidate onSubmit={(e) => { e.preventDefault(); void add(); }} className="space-y-3 rounded-xl border border-border bg-surface-2 p-4 [&_[aria-invalid=true]]:border-danger">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-fg"><UserPlus className="h-4 w-4 text-primary" aria-hidden="true" />{t.addMember}</h3>
+            <form id={formId} noValidate onSubmit={(e) => { e.preventDefault(); void add(); }} className="space-y-3 rounded-lg border border-border p-4 [&_[aria-invalid=true]]:border-danger">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-fg-strong"><UserPlus className="h-4 w-4 text-fg-muted" aria-hidden="true" />{t.addMember}</h3>
               <div className="grid gap-3 sm:grid-cols-[1fr_11rem]">
                 <Field label={t.email} htmlFor={emailId} error={addError ?? undefined} errorId={emailErrorId}>
                   <Input

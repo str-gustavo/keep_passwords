@@ -1,6 +1,5 @@
 'use client';
 import { useReducer, useRef, useState } from 'react';
-import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Dialog } from '@/components/ui/Dialog';
 import { toast } from '@/components/ui/Toast';
@@ -134,18 +133,18 @@ export function RecordForm({ mode, record, folderId = null, sharedFolderId = nul
             </div>
           ) : (
             <form id={FORM_ID} noValidate onSubmit={(e) => { e.preventDefault(); void save(); }} className="space-y-6 [&_[aria-invalid=true]]:border-danger">
-              <div className="flex items-center gap-3">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
-                  <TypeIcon type={typeDef.id} className="h-5 w-5" />
+              <div className="flex items-center gap-2.5">
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-border text-fg-muted">
+                  <TypeIcon type={typeDef.id} className="h-4 w-4" />
                 </span>
-                <Badge tone="primary">{typeDef.label}</Badge>
+                <span className="text-sm font-medium text-fg-strong">{typeDef.label}</span>
                 {!editing && (
                   <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={() => setChoosingType(true)}>{t.changeType}</Button>
                 )}
               </div>
               <FormFields state={state} dispatch={dispatch} errors={errors} />
               <section aria-labelledby="record-attachments-title" className="space-y-3">
-                <h3 id="record-attachments-title" className="text-xs font-semibold uppercase tracking-wide text-fg-muted">{t.attachments}</h3>
+                <h3 id="record-attachments-title" className="text-sm font-semibold text-fg-strong">{t.attachments}</h3>
                 <AttachmentsEditor
                   recordId={editing?.id ?? null} attachments={editing?.data?.attachments ?? []} onBusyChange={setUploading} onDelete={setToDelete}
                 />

@@ -35,7 +35,7 @@ export function SecuritySection({ formId, email, lockText, lockMinutes, lockPend
       </div>
 
       <div className="mt-6 border-t border-border pt-6">
-        <h3 className="text-sm font-semibold text-fg">{t.changeMasterPassword}</h3>
+        <h3 className="text-sm font-semibold text-fg-strong">{t.changeMasterPassword}</h3>
         <p className="mt-0.5 text-xs text-fg-muted">{t.changeMasterPasswordHint}</p>
         <ChangePasswordForm email={email} />
       </div>

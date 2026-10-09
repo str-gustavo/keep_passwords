@@ -19,7 +19,7 @@ const MAX_FILE_BYTES = 10 * 1024 * 1024;
 const PREVIEW_ROWS = 10;
 const FORMAT_LABELS: Record<CsvFormat, string> = { keeper: t.importFormatKeeper, chrome: t.importFormatChrome, bitwarden: t.importFormatBitwarden, generic: t.importFormatGeneric };
 const SUPPORTED = [t.importFormatKeeper, t.importFormatChrome, t.importFormatBitwarden, t.importFormatGeneric];
-const card = 'rounded-xl border border-border bg-surface p-4 shadow-sm sm:p-6';
+const card = 'rounded-xl border border-border bg-surface p-4 sm:p-6';
 
 export function ImportView() {
   const router = useRouter();
@@ -91,7 +91,8 @@ export function ImportView() {
       <section className={card}>
         <Label htmlFor="import-file">{t.importFile}</Label>
         {/* Kept as a plain, visible native input: it stays keyboard/screen-reader friendly and automation can see it.
-            Its button text comes from the browser language (pt-BR browsers show "Escolher arquivo"). */}
+            Its button text comes from the browser language (pt-BR browsers show "Escolher arquivo"); it looks like a
+            secondary Button, leaving the orange to "Importar", the page's primary action. */}
         <input
           id="import-file"
           data-testid="import-file"
@@ -99,7 +100,7 @@ export function ImportView() {
           accept=".csv,text/csv"
           disabled={running}
           onChange={onFile}
-          className="block w-full cursor-pointer rounded-lg border border-dashed border-border bg-surface-2 p-3 text-sm text-fg-muted outline-none transition hover:border-primary focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-primary file:px-4 file:py-2 file:text-sm file:font-medium file:text-fg-on-primary hover:file:bg-primary-hover"
+          className="block w-full cursor-pointer rounded-lg border border-dashed border-border bg-surface p-3 text-sm text-fg-muted outline-none transition-colors hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 file:mr-3 file:h-8 file:cursor-pointer file:rounded-lg file:border file:border-solid file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-semibold file:text-fg hover:file:bg-surface-2"
         />
         <p className="mt-2 text-xs text-fg-muted">{t.importFileHint}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">
@@ -109,7 +110,7 @@ export function ImportView() {
       </section>
 
       {error && (
-        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/40 bg-danger/5 p-4 text-sm text-danger">
+        <div role="alert" className="flex items-start gap-3 rounded-xl border border-danger/30 bg-danger-soft p-4 text-sm text-danger">
           <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
           <p>{error}</p>
         </div>
@@ -117,10 +118,10 @@ export function ImportView() {
 
       {parsed && plan && (
         <>
-          <section aria-labelledby="import-preview-title" className="overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+          <section aria-labelledby="import-preview-title" className="overflow-hidden rounded-xl border border-border bg-surface">
             <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
-              <FileUp className="h-5 w-5 text-primary" aria-hidden="true" />
-              <h2 id="import-preview-title" className="text-sm font-semibold text-fg">{t.importPreview}</h2>
+              <FileUp className="h-4 w-4 text-fg-muted" aria-hidden="true" />
+              <h2 id="import-preview-title" className="text-sm font-semibold text-fg-strong">{t.importPreview}</h2>
               <Badge tone="primary">{t.importDetected(FORMAT_LABELS[parsed.format])}</Badge>
               <span data-testid="import-preview-count" className="ml-auto text-sm font-medium text-fg">{t.importCount(plan.total)}</span>
             </header>
@@ -172,7 +173,7 @@ export function ImportView() {
               {running && (
                 <div className="min-w-40 flex-1">
                   <p role="status" className="text-sm text-fg">{t.importProgress(progress.done, progress.total)}</p>
-                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border" aria-hidden="true">
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-surface-2" aria-hidden="true">
                     <div className="h-full rounded-full bg-primary transition-[width]" style={{ width: `${progress.total ? (progress.done / progress.total) * 100 : 0}%` }} />
                   </div>
                 </div>
