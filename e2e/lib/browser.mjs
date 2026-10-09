@@ -25,8 +25,14 @@ export function browser(session, { extension, headed = false } = {}) {
   const launch = [...(headed || headedFlag ? ['--headed'] : []), ...(extension ? ['--extension', extension] : [])];
   const run = (args, timeout = 60_000) => {
     const all = ['--session', session, ...launch, ...args];
+    const started = Date.now();
     try { return execFileSync(process.execPath, [AB, ...all], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout }).trim(); }
     catch (e) { throw new Error(`agent-browser ${args.join(' ')} failed: ${e.stderr || e.stdout || e.message}`); }
+    finally {
+      // E2E_TRACE=1 prints every agent-browser call slower than 2 s, to find where a scenario spends its time.
+      const took = Date.now() - started;
+      if (process.env.E2E_TRACE && took > 2000) console.log(`  [trace ${session}] ${took} ms: ${args.slice(0, 2).join(' ')} ${String(args[2] ?? '').slice(0, 80)}`);
+    }
   };
   mkdirSync('e2e/screenshots', { recursive: true });
 

@@ -59,10 +59,14 @@ function openRailPanel(b, trigger, content) {
 export const openFolders = (b) => openRailPanel(b, 'nav-folders', 'nav-new-folder');
 export const openTools = (b) => openRailPanel(b, 'nav-tools', 'nav-generator');
 
-// Closes the open rail panel with Escape (the panel listens on the document; native <dialog>s are another matter,
-// see `closeDialog`).
+// Closes the open rail panel by clicking its icon again (the icon toggles the panel). Not with Escape: after a
+// `press Escape`, agent-browser 0.38 makes every later click in that session take about 5 s (measured on the sign-in
+// page too), which turned the folders scenario from 15 s into 4 minutes.
 export function closeRailPanel(b) {
-  b.press('Escape');
+  for (const trigger of ['nav-folders', 'nav-tools']) {
+    const expanded = b.evalJs(`document.querySelector(${JSON.stringify(tid(trigger))})?.getAttribute('aria-expanded')`);
+    if (expanded === 'true') b.click(tid(trigger));
+  }
   b.waitUntil(`!document.querySelector('[data-testid="nav-folders"][aria-expanded="true"], [data-testid="nav-tools"][aria-expanded="true"]')`, 15000, 'the rail panel to close');
 }
 
