@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { AuthCard, AuthError } from '@/components/auth/AuthCard';
+import { AuthSection, AuthError } from '@/components/auth/AuthSection';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
 import { RecoveryPhraseView } from '@/components/auth/RecoveryPhraseView';
 import { Button } from '@/components/ui/Button';
@@ -58,14 +58,14 @@ export default function SignUpPage() {
 
   if (phrase) {
     return (
-      <AuthCard title={t.recoveryPhraseTitle}>
+      <AuthSection title={t.recoveryPhraseTitle}>
         <RecoveryPhraseView phrase={phrase} onContinue={() => router.replace('/cofre')} />
-      </AuthCard>
+      </AuthSection>
     );
   }
 
   return (
-    <AuthCard
+    <AuthSection
       title={t.signUpTitle}
       description={t.signUpSubtitle}
       footer={<p>{t.haveAccount} <Link href="/entrar" className="font-medium text-primary-text underline-offset-2 hover:underline">{t.signIn}</Link></p>}
@@ -87,6 +87,6 @@ export default function SignUpPage() {
         <Button type="submit" data-testid="auth-submit" loading={loading} className="w-full">{t.signUp}</Button>
       </form>
       <AuthError message={formError} />
-    </AuthCard>
+    </AuthSection>
   );
 }

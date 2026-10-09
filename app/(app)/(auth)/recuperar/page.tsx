@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { AuthCard, AuthError } from '@/components/auth/AuthCard';
+import { AuthSection, AuthError } from '@/components/auth/AuthSection';
 import { PasswordStrengthMeter } from '@/components/auth/PasswordStrengthMeter';
 import { RecoveryPhraseView } from '@/components/auth/RecoveryPhraseView';
 import { Button } from '@/components/ui/Button';
@@ -88,15 +88,15 @@ export default function RecoverPage() {
 
   if (step === 'done' && newPhrase) {
     return (
-      <AuthCard title={t.newRecoveryPhraseTitle} description={t.newRecoveryPhraseNotice}>
+      <AuthSection title={t.newRecoveryPhraseTitle} description={t.newRecoveryPhraseNotice}>
         <RecoveryPhraseView phrase={newPhrase} onContinue={() => router.replace('/cofre')} />
-      </AuthCard>
+      </AuthSection>
     );
   }
 
   if (step === 'phrase') {
     return (
-      <AuthCard title={t.recover} description={t.recoverPhraseSubtitle} footer={backLink}>
+      <AuthSection title={t.recover} description={t.recoverPhraseSubtitle} footer={backLink}>
         <form onSubmit={onComplete} noValidate className="space-y-4">
           <div className="flex items-center justify-between gap-2 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm">
             <span className="truncate text-fg">{email.trim()}</span>
@@ -115,12 +115,12 @@ export default function RecoverPage() {
           <Button type="submit" data-testid="recovery-submit" loading={loading} className="w-full">{t.recover}</Button>
         </form>
         <AuthError message={formError} />
-      </AuthCard>
+      </AuthSection>
     );
   }
 
   return (
-    <AuthCard title={t.recover} description={t.recoverSubtitle} footer={backLink}>
+    <AuthSection title={t.recover} description={t.recoverSubtitle} footer={backLink}>
       <form onSubmit={onStart} noValidate className="space-y-4">
         <Field label={t.email} htmlFor="recovery-email" error={errors.email}>
           <Input id="recovery-email" data-testid="recovery-email" type="email" autoComplete="username" inputMode="email" autoFocus value={email} onChange={(e) => setEmail(e.target.value)} aria-invalid={!!errors.email} disabled={loading} />
@@ -128,6 +128,6 @@ export default function RecoverPage() {
         <Button type="submit" data-testid="recovery-submit" loading={loading} className="w-full">{t.continue}</Button>
       </form>
       <AuthError message={formError} />
-    </AuthCard>
+    </AuthSection>
   );
 }

@@ -233,7 +233,12 @@ export const t = {
   genericSaveError: 'Não foi possível salvar. Tente novamente.',
   locked: 'Cofre bloqueado',
   unlock: 'Desbloquear',
-  appTagline: 'Seu cofre de senhas com criptografia de ponta a ponta',
+  // Sign-in hero (right-hand panel, ≥ 1024 px) and the footer under the auth forms.
+  heroTitle: 'Seu cofre, suas chaves.',
+  heroBody: 'Criptografia de ponta a ponta, preenchimento automático e compartilhamento com a equipe.',
+  footerLanguage: 'Português (BR)',
+  footerHelp: 'Ajuda',
+  footerPrivacy: 'Privacidade',
   signInTitle: 'Entrar no cofre',
   signInSubtitle: 'Use seu e-mail e sua senha mestra.',
   signUpTitle: 'Criar sua conta',

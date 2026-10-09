@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense, useState } from 'react';
-import { AuthCard, AuthError } from '@/components/auth/AuthCard';
+import { AuthSection, AuthError } from '@/components/auth/AuthSection';
 import { Button } from '@/components/ui/Button';
 import { Field } from '@/components/ui/Field';
 import { Input } from '@/components/ui/Input';
@@ -38,7 +38,7 @@ function SignInForm() {
   }
 
   return (
-    <AuthCard
+    <AuthSection
       title={t.signInTitle}
       description={t.signInSubtitle}
       footer={
@@ -58,13 +58,13 @@ function SignInForm() {
         <Button type="submit" data-testid="auth-submit" loading={loading} className="w-full">{t.signIn}</Button>
       </form>
       <AuthError message={formError} />
-    </AuthCard>
+    </AuthSection>
   );
 }
 
 export default function SignInPage() {
   return (
-    <Suspense fallback={<AuthCard title={t.signInTitle} description={t.signInSubtitle}><div className="flex justify-center py-6 text-primary"><Spinner /></div></AuthCard>}>
+    <Suspense fallback={<AuthSection title={t.signInTitle} description={t.signInSubtitle}><div className="flex justify-center py-6 text-primary"><Spinner /></div></AuthSection>}>
       <SignInForm />
     </Suspense>
   );
