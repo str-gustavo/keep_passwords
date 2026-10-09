@@ -32,7 +32,7 @@ export function Menu({ trigger, items, align = 'right', placement = 'bottom', tr
       {open && (
         <div role="menu" className={cn('absolute z-40 min-w-44 rounded-lg border border-border bg-surface py-1 shadow-float', PLACEMENT[placement], placement !== 'right' && (align === 'right' ? 'right-0' : 'left-0'))}>
           {items.map((it) => (
-            <button key={it.label} type="button" role="menuitem" data-testid={it.testId} onClick={() => { setOpen(false); it.onSelect(); }} className={cn('flex w-full items-center gap-2 px-3 py-2 text-left text-sm outline-none hover:bg-primary-soft focus-visible:bg-primary-soft', it.danger ? 'text-danger' : 'text-fg')}>
+            <button key={it.label} type="button" role="menuitem" data-testid={it.testId} onClick={() => { setOpen(false); it.onSelect(); }} className={cn('flex w-full items-center gap-2 px-3 py-2 text-left text-sm outline-none hover:bg-primary-soft focus-visible:bg-primary-soft focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40', it.danger ? 'text-danger' : 'text-fg')}>
               {it.icon}{it.label}
             </button>
           ))}

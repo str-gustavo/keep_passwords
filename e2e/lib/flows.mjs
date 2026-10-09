@@ -63,7 +63,7 @@ export const openTools = (b) => openRailPanel(b, 'nav-tools', 'nav-generator');
 // see `closeDialog`).
 export function closeRailPanel(b) {
   b.press('Escape');
-  b.waitUntil(`!document.querySelector('[aria-haspopup="dialog"][aria-expanded="true"]')`, 15000, 'the rail panel to close');
+  b.waitUntil(`!document.querySelector('[data-testid="nav-folders"][aria-expanded="true"], [data-testid="nav-tools"][aria-expanded="true"]')`, 15000, 'the rail panel to close');
 }
 
 // Unlocks the lock screen (shown after a reload or the auto-lock: keys only live in memory).

@@ -38,7 +38,7 @@ export function Rail({ variant }: { variant: RailVariant }) {
 
   if (variant === 'bottom') {
     return (
-      <nav aria-label={t.appName} className="fixed inset-x-0 bottom-0 z-30 grid h-14 auto-cols-[minmax(0,1fr)] grid-flow-col items-center justify-items-center border-t border-rail-band bg-rail px-1 lg:hidden">
+      <nav data-rail="bottom" aria-label={t.appName} className="fixed inset-x-0 bottom-0 z-30 grid h-14 auto-cols-[minmax(0,1fr)] grid-flow-col items-center justify-items-center border-t border-rail-band bg-rail px-1 lg:hidden">
         {items}
         {link(SETTINGS)}
         <AccountMenu variant="bottom" />
@@ -46,7 +46,7 @@ export function Rail({ variant }: { variant: RailVariant }) {
     );
   }
   return (
-    <nav aria-label={t.appName} className="flex h-full w-14 shrink-0 flex-col items-center gap-1 bg-rail py-3">
+    <nav data-rail="side" aria-label={t.appName} className="flex h-full w-14 shrink-0 flex-col items-center gap-1 bg-rail py-3">
       <span className="mb-3 flex h-10 w-10 items-center justify-center"><NexusMark size={22} /></span>
       {items}
       <div className="mt-auto flex flex-col items-center gap-3">
