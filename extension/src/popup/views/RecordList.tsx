@@ -30,12 +30,18 @@ async function copyFrom(get: () => Promise<string>, done: string, notify: Notify
   }
 }
 
-export function RecordList({ items, tabId, label, showHost = false }: { items: MatchItem[]; tabId: number | null; label: string; showHost?: boolean }) {
+/**
+ * `tabId`: the active tab "Preencher" fills into (null: no fill at all). `canFill`: which rows offer it (default: all,
+ * e.g. "Este site", whose rows all match the tab already).
+ */
+export function RecordList({ items, tabId, label, showHost = false, canFill = () => true }: {
+  items: MatchItem[]; tabId: number | null; label: string; showHost?: boolean; canFill?: (item: MatchItem) => boolean;
+}) {
   const [notice, notify] = useNotice();
   return (
     <>
       <ul aria-label={label} className="divide-y divide-border">
-        {items.map((item) => <RecordRow key={item.id} item={item} tabId={tabId} showHost={showHost} notify={notify} />)}
+        {items.map((item) => <RecordRow key={item.id} item={item} tabId={tabId !== null && canFill(item) ? tabId : null} showHost={showHost} notify={notify} />)}
       </ul>
       <NoticeBar notice={notice} />
     </>

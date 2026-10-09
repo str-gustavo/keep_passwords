@@ -273,13 +273,30 @@ describe('"Buscar"', () => {
     render(<App />);
 
     await user.click(await screen.findByRole('tab', { name: 'Buscar' }));
-    await screen.findByText('Banco', { selector: '[data-record-title]' });
-    await user.click(within(rowOf('Banco')).getByRole('button', { name: 'Preencher' }));
-    await waitFor(() => expect(sent(sendMock, 'fillFromPopup')).toEqual([{ type: 'fillFromPopup', id: 'r3', tabId: tab.id }]));
+    await screen.findByText('GitHub (trabalho)', { selector: '[data-record-title]' });
+    await user.click(within(rowOf('GitHub (trabalho)')).getByRole('button', { name: 'Preencher' }));
+    await waitFor(() => expect(sent(sendMock, 'fillFromPopup')).toEqual([{ type: 'fillFromPopup', id: 'r2', tabId: tab.id }]));
 
     await user.click(within(rowOf('Banco')).getByRole('button', { name: 'Copiar senha' }));
     await waitFor(() => expect(board).toEqual([SECRET]));
     expect(document.documentElement.outerHTML).not.toContain(SECRET);
+  });
+
+  it('offers "Preencher" only on records for the active tab’s site; the others keep their copy actions', async () => {
+    addTab({ url: 'https://gist.github.com/ana' });
+    unlockedSW();
+    const user = setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Buscar' }));
+    await screen.findByText('Banco', { selector: '[data-record-title]' });
+    expect(within(rowOf('GitHub')).getByRole('button', { name: 'Preencher' })).toBeTruthy();
+    expect(within(rowOf('GitHub (trabalho)')).getByRole('button', { name: 'Preencher' })).toBeTruthy();
+    const bankRow = rowOf('Banco');
+    expect(within(bankRow).queryByRole('button', { name: 'Preencher' })).toBeNull();
+    expect(within(bankRow).getByRole('button', { name: 'Copiar login' })).toBeTruthy();
+    expect(within(bankRow).getByRole('button', { name: 'Copiar senha' })).toBeTruthy();
+    expect(screen.getAllByRole('button', { name: 'Preencher' })).toHaveLength(2);
   });
 
   it('says so when nothing matches', async () => {

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { urlsMatch } from '@/shared/domain';
 import { send, type MatchItem } from '@/shared/messages';
 import { errorText } from '../lib/errors';
 import type { ActiveTab } from '../lib/tab';
@@ -6,7 +7,8 @@ import { Notice, Spinner, inputClass } from '../ui/controls';
 import { RecordList } from './RecordList';
 
 /**
- * "Buscar": every record (the service worker filters title/login/url, max 50). Escape clears the query.
+ * "Buscar": every record (the service worker filters title/login/url, max 50). Escape clears the query. "Preencher" is
+ * offered only on records for the active tab's site (the service worker would refuse the others); copy works on all.
  * `focusSignal` > 0 moves focus into the search box, again each time it changes (the tab was chosen with a click,
  * Enter or Space); 0 leaves focus where it is (arrow-key navigation between the tabs).
  */
@@ -53,7 +55,15 @@ export function Search({ tab, version, focusSignal }: { tab: ActiveTab | null | 
       {error && <div className="px-4 py-2"><Notice kind="error">{error}</Notice></div>}
       {!error && items === null && <Spinner />}
       {items !== null && items.length === 0 && <p className="p-6 text-center text-sm text-fg-muted">Nenhum registro encontrado.</p>}
-      {items !== null && items.length > 0 && <RecordList items={items} tabId={tab?.host ? tab.id : null} label="Resultados da busca" showHost />}
+      {items !== null && items.length > 0 && (
+        <RecordList
+          items={items}
+          tabId={tab?.host ? tab.id : null}
+          canFill={(item) => !!tab && urlsMatch(item.url, tab.url)}
+          label="Resultados da busca"
+          showHost
+        />
+      )}
     </div>
   );
 }
