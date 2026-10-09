@@ -20,10 +20,9 @@ function svgEl<K extends keyof SVGElementTagNameMap>(doc: Document, tag: K, attr
 const xPaths = (doc: Document) => [X_CHEVRON, ...X_WEDGES].map((d) => svgEl(doc, 'path', { d }));
 const decorative = (size: number, viewBox: string): Attrs => ({ viewBox, width: size, height: size, 'aria-hidden': 'true', focusable: 'false' });
 
-/** The product icon (icon-small.svg): navy padlock with the orange Nexus X. */
+/** The bare padlock with the orange Nexus X (icon-small.svg without its navy background tile). */
 export function lockIcon(doc: Document, size: number): SVGSVGElement {
-  return svgEl(doc, 'svg', decorative(size, '0 0 128 128'), [
-    svgEl(doc, 'rect', { width: 128, height: 128, rx: 28, fill: '#0D2A4D' }),
+  return svgEl(doc, 'svg', decorative(size, '8 10 112 112'), [
     svgEl(doc, 'path', { d: 'M40 56V40a24 24 0 0 1 48 0v16', fill: 'none', stroke: '#3F87B4', 'stroke-width': 16, 'stroke-linecap': 'round' }),
     svgEl(doc, 'rect', { x: 14, y: 50, width: 100, height: 68, rx: 14, fill: '#1A6592' }),
     svgEl(doc, 'g', { transform: 'translate(30 50) scale(0.68)', fill: NEXUS_ORANGE }, xPaths(doc)),
