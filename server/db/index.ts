@@ -1,3 +1,4 @@
+import type { PGlite } from '@electric-sql/pglite';
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres';
 import type { PgliteDatabase } from 'drizzle-orm/pglite';
 import * as schema from './schema';
@@ -7,6 +8,9 @@ export type Db = NodePgDatabase<typeof schema> | PgliteDatabase<typeof schema>;
 
 let dbPromise: Promise<Db> | null = null;
 let closeFn: (() => Promise<void>) | null = null;
+// The in-memory PGlite (tests) is reused across resets: instantiating the WASM runtime per test
+// occasionally stalls for tens of seconds under memory pressure, so a reset wipes the schema instead.
+let memoryClient: PGlite | null = null;
 
 async function connect(): Promise<Db> {
   // An empty DATABASE_URL counts as unset (PGlite).
@@ -22,8 +26,11 @@ async function connect(): Promise<Db> {
   }
   const { PGlite } = await import('@electric-sql/pglite');
   const { drizzle } = await import('drizzle-orm/pglite');
-  const client = process.env.KEEP_DB === 'memory' ? new PGlite() : new PGlite(process.env.PGLITE_DIR ?? '.data/pglite');
-  closeFn = () => client.close();
+  const inMemory = process.env.KEEP_DB === 'memory';
+  const client = inMemory ? (memoryClient ??= new PGlite()) : new PGlite(process.env.PGLITE_DIR ?? '.data/pglite');
+  closeFn = inMemory
+    ? async () => { await client.exec('DROP SCHEMA public CASCADE; CREATE SCHEMA public; DROP SCHEMA IF EXISTS drizzle CASCADE;'); }
+    : () => client.close();
   // Surfaces a failed start (e.g. an unusable data directory) here rather than as an unhandled rejection.
   await client.waitReady;
   const db = drizzle(client, { schema });
