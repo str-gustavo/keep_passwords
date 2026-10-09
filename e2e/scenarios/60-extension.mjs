@@ -1,8 +1,8 @@
 import path from 'node:path';
+import { pause } from '../lib/browser.mjs';
 import { createLogin, extensionId, idFromTestId, signUp, unlock } from '../lib/flows.mjs';
 
 const TOTP = 'otpauth://totp/Loja:ana?secret=GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ&issuer=Loja';
-const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 const q = (sel) => `document.querySelector(${JSON.stringify(sel)})`;
 const ICONS = 'nexus-passwords-icon:not([hidden])';
 

@@ -14,7 +14,8 @@ const VIEWPORT = ['1440', '1000'];
 // soon as the condition holds or the deadline passes, and longer waits loop over several such calls.
 // (`wait <sel> --state hidden` is not usable: this CLI parses `--state` as the global "load saved state" flag.)
 const WAIT_CHUNK_MS = 20_000;
-const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+// Blocks for `ms` (the scenarios are synchronous CLI calls; there is no event loop work to yield to).
+export const pause = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
 const visibleExpr = (sel) => `(() => { const el = document.querySelector(${JSON.stringify(sel)}); return !!el && el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden'; })()`;
 
