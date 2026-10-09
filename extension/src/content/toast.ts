@@ -1,3 +1,5 @@
+import { clearClipboardIfStill } from '@/shared/clipboard-clear';
+import { CLIPBOARD_CLEAR_MS } from '@/shared/constants';
 import { findOtpField } from '@/shared/forms';
 import type { TotpCode } from '@/shared/messages';
 import { fillOtp } from '@/shared/otp';
@@ -15,6 +17,8 @@ const DEFAULT_PERIOD = 30;
 
 /** One toast per frame; a new one replaces it. Removing the host drops its text (code or password) with it. */
 let current: { host: HTMLElement; dispose: () => void } | null = null;
+/** What a card of this frame copied last (a TOTP code or a generated password), until its 30 s clear ran. */
+let lastCopied: string | null = null;
 
 export function hideToast(): void {
   const c = current;
@@ -30,6 +34,7 @@ export function formatCode(code: string): string {
 }
 
 interface Card {
+  host: HTMLElement;
   card: HTMLElement;
   status: HTMLElement;
   close: () => void;
@@ -67,18 +72,34 @@ function mountCard(doc: Document, title: string, lifetimeMs: number): Card {
   const timer = setTimeout(close, lifetimeMs);
   disposers.push(() => clearTimeout(timer));
   current = { host, dispose: () => { for (const d of disposers) d(); removeOverlay(host); } };
-  return { card, status, close, onDispose: (fn) => disposers.push(fn), button };
+  return { host, card, status, close, onDispose: (fn) => disposers.push(fn), button };
 }
 
-async function copy(text: string, status: HTMLElement, done: string): Promise<void> {
+/**
+ * 30 s after a copy, clears the clipboard if it still holds `text` (shared/clipboard-clear.ts): read back only when the
+ * page's origin already has clipboard-read granted — never a prompt; otherwise (no permission, or readText unavailable
+ * in this content script) only while the card that copied it is still up and no card copied anything else since.
+ * The timer survives the card (the read-back check does not need it). Never throws.
+ */
+function clearLater(text: string, host: HTMLElement): void {
+  setTimeout(() => {
+    const stillOurs = () => lastCopied === text && current?.host === host && host.isConnected;
+    void clearClipboardIfStill(text, stillOurs).finally(() => { if (lastCopied === text) lastCopied = null; });
+  }, CLIPBOARD_CLEAR_MS);
+}
+
+async function copy(text: string, t: Card, done: string): Promise<void> {
   try {
     await navigator.clipboard.writeText(text);
-    status.className = 'status';
-    status.textContent = done;
   } catch {
-    status.className = 'status error';
-    status.textContent = T.copyFailed;
+    t.status.className = 'status error';
+    t.status.textContent = T.copyFailed;
+    return;
   }
+  lastCopied = text;
+  clearLater(text, t.host);
+  t.status.className = 'status';
+  t.status.textContent = done;
 }
 
 export interface TotpToastInit {
@@ -103,7 +124,7 @@ export function showTotpToast(doc: Document, init: TotpToastInit): void {
   const value = h(doc, 'span', { class: 'value' });
   const countdown = h(doc, 'span', { class: 'muted' });
   const fill = h(doc, 'span');
-  const copyButton = t.button(T.copy, 'primary', () => void copy(code, t.status, T.codeCopied));
+  const copyButton = t.button(T.copy, 'primary', () => void copy(code, t, T.codeCopied));
   const fillButton = t.button(T.fillCode, 'secondary', () => {
     const field = findOtpField(doc);
     if (!field) return;
@@ -150,7 +171,7 @@ export function showPasswordToast(doc: Document, password: string): void {
   t.card.append(
     h(doc, 'span', { class: 'value password', text: password }),
     h(doc, 'span', { class: 'muted', text: T.generatedHint }),
-    h(doc, 'div', { class: 'actions' }, [t.button(T.copy, 'primary', () => void copy(password, t.status, T.passwordCopied))]),
+    h(doc, 'div', { class: 'actions' }, [t.button(T.copy, 'primary', () => void copy(password, t, T.passwordCopied))]),
     t.status,
   );
 }

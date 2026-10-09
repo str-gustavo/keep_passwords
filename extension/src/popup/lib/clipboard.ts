@@ -9,6 +9,7 @@
 // the service worker clears the clipboard through an offscreen document, popup open or not. That clear cannot check
 // what the clipboard holds, so it is unconditional; the check above applies only while the popup stays open.
 import { toBase64 } from '@app/crypto/encoding';
+import { clearClipboardIfStill } from '@/shared/clipboard-clear';
 import { CLIPBOARD_CLEAR_MS } from '@/shared/constants';
 import { send } from '@/shared/messages';
 
@@ -16,25 +17,9 @@ export { CLIPBOARD_CLEAR_MS };
 
 let lastCopied: string | null = null;
 
-async function canReadClipboard(): Promise<boolean> {
-  try {
-    const status = await navigator.permissions.query({ name: 'clipboard-read' as PermissionName });
-    return status.state === 'granted';
-  } catch {
-    return false;
-  }
-}
-
 async function clearIfStillOurs(text: string): Promise<void> {
   try {
-    let current: string | null = null;
-    if (await canReadClipboard()) {
-      try { current = await navigator.clipboard.readText(); } catch { current = null; }
-    }
-    const ours = current !== null ? current === text : lastCopied === text;
-    if (ours) await navigator.clipboard.writeText('');
-  } catch {
-    // Not focused, or the popup is going away: nothing more can be done from here.
+    await clearClipboardIfStill(text, () => lastCopied === text);
   } finally {
     if (lastCopied === text) lastCopied = null;
   }
