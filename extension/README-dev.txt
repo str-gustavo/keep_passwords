@@ -67,6 +67,44 @@ Chrome Web Store account
 
 Permissions shown at install
 ----------------------------
-  storage, alarms, tabs, scripting, activeTab, offscreen, clipboardWrite
+  storage, alarms, tabs, offscreen, clipboardWrite
   ("Modify data you copy and paste": used only to clear the clipboard after a copy).
   Access to the server origin is requested in the popup when the server URL is set.
+  The content script runs on <all_urls> (it finds login forms on any site), which
+  Chrome shows as "Read and change all your data on all websites".
+  A test (extension/tests/manifest.test.ts) keeps the list above equal to manifest.json.
+
+Web Store listing checklist
+---------------------------
+  Before submitting a version to the Chrome Web Store (Developer Dashboard):
+  [ ] Privacy policy URL (Privacy tab). Mandatory: the extension handles credentials
+      ("authentication information" and "website content" in the data-use form).
+      State: zero-knowledge, the master password never leaves the device, the
+      decrypted vault lives only in memory (chrome.storage.session), nothing is sold
+      or shared, no analytics.
+  [ ] Single-purpose description: "Fill and save the passwords of your Nexus
+      Passwords vault on the sites you visit." Everything in the listing must serve
+      that one purpose.
+  [ ] Permission justifications (Privacy tab, one per permission):
+      - storage: the configured server, the e-mail of the last sign-in and the
+        "never for this site" list (storage.local); the session and decrypted vault
+        (storage.session, memory only, cleared on lock and browser close).
+      - alarms: the once-a-minute auto-lock check and the clipboard clear 30 s
+        after a copy, which must run even when the service worker was stopped.
+      - tabs: read the active tab's URL to show the records for that site and the
+        toolbar badge count, and send fill requests to that tab's content script.
+      - offscreen: an offscreen document (reason CLIPBOARD) clears the clipboard
+        30 s after a copy, with the popup closed.
+      - clipboardWrite: copying a login, password or 2FA code, and clearing it.
+      - content script on <all_urls> (broad host access, triggers the in-depth
+        review): login, sign-up and 2FA forms can be on any site; the script only
+        detects forms, offers fill/save, and receives a credential only for the
+        site the service worker matched it to. No remote code; no host_permissions
+        in the store build (the server origin is an optional permission).
+  [ ] Remote code: "No, I am not using remote code".
+  [ ] Screenshots: 1280x800 (or 640x400) PNG/JPEG, at least 1, up to 5
+      (popup over a login page, inline fill menu, save bar, generator).
+  [ ] Small promo tile: 440x280 PNG/JPEG.
+  [ ] Store icon: 128x128 (icons/icon-128.png in the zip).
+  [ ] Zip from `npm run ext:zip` (no "key", no "host_permissions"), version bumped
+      in manifest.json and both package.json files.

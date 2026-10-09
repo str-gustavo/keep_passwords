@@ -30,7 +30,7 @@
       "all_frames": true
     }
   ],
-  "permissions": ["storage", "alarms", "tabs", "activeTab", "scripting", "offscreen", "clipboardWrite"],
+  "permissions": ["storage", "alarms", "tabs", "offscreen", "clipboardWrite"],
   "optional_host_permissions": ["https://*/*", "http://localhost/*", "http://127.0.0.1/*"],
   "minimum_chrome_version": "121"
 }

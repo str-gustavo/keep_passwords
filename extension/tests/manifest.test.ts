@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import offscreenHtml from '../offscreen.html?raw';
+import readme from '../README-dev.txt?raw';
 import manifest from '../manifest.json';
 import keyFile from '../key.json';
 import extensionPackage from '../package.json';
@@ -19,6 +20,14 @@ describe('manifest.json', () => {
   it('can clear the clipboard after a copy from an offscreen document, even with the popup closed', () => {
     expect(manifest.permissions).toEqual(expect.arrayContaining(['offscreen', 'clipboardWrite']));
     expect(offscreenHtml).toContain('src="/src/offscreen/main.ts"');
+  });
+
+  it('asks only for the permissions it uses (no scripting, no activeTab), as README-dev.txt lists them', () => {
+    // tabs: the active tab's URL (popup, badge) and messaging its content script; storage.session/local; the auto-lock
+    // and clipboard alarms; the offscreen document that clears the clipboard.
+    expect(manifest.permissions).toEqual(['storage', 'alarms', 'tabs', 'offscreen', 'clipboardWrite']);
+    expect(readme).toContain(`  ${manifest.permissions.join(', ')}\n`);
+    expect(readme).not.toMatch(/\bscripting\b|\bactiveTab\b/);
   });
 
   it('keeps dev-only fields out of the source manifest', () => {
