@@ -65,7 +65,7 @@ export function FolderHeaderActions({ folder, variant = 'header', menuTestId = '
             <span
               className={cn(
                 'flex items-center justify-center rounded-lg transition-colors',
-                variant === 'header' ? 'h-9 w-9 border border-border text-fg-muted hover:bg-surface-2 hover:text-fg' : 'h-7 w-7 text-sidebar-fg/70 transition-opacity hover:bg-sidebar-fg/10 hover:text-sidebar-fg lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 lg:group-has-[[aria-expanded=true]]:opacity-100',
+                variant === 'header' ? 'h-9 w-9 border border-border text-fg-muted hover:bg-surface-2 hover:text-fg' : 'h-7 w-7 text-rail-fg/70 transition-opacity hover:bg-rail-fg/10 hover:text-rail-fg lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 lg:group-has-[[aria-expanded=true]]:opacity-100',
               )}
             >
               <EllipsisVertical className="h-4 w-4" aria-hidden="true" />

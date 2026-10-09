@@ -39,7 +39,13 @@ export function Toaster() {
       style={{ inset: 'auto 1rem 1rem auto' }}
       className="pointer-events-none fixed z-50 m-0 flex flex-col gap-2 overflow-visible border-0 bg-transparent p-0"
     >
-      {toasts.map((t) => <div key={t.id} role="status" className={`rounded-lg px-4 py-2 text-sm text-fg-on-status shadow ${t.kind === 'error' ? 'bg-danger' : 'bg-success'}`}>{t.message}</div>)}
+      {toasts.map((t) => (
+        <div key={t.id} role="status" className={`flex items-center gap-2 rounded-lg border border-border border-l-[3px] bg-surface px-4 py-2.5 text-sm text-fg shadow-float ${t.kind === 'error' ? 'border-l-danger' : 'border-l-success'}`}>
+          {/* The status dot: E2E checks for an error toast with `[data-testid="toast"] .bg-danger`. */}
+          <span aria-hidden="true" className={`${t.kind === 'error' ? 'bg-danger' : 'bg-success'} inline-block h-2 w-2 shrink-0 rounded-full`} />
+          {t.message}
+        </div>
+      ))}
     </div>
   );
 }

@@ -3,39 +3,44 @@
 @custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 :root {
-  /* Nexus Logtec palette: orange #FA681F on navy #0D2A4D. Every text/background pair is checked
-     (WCAG AA, >= 4.5:1) by tests/unit/ui/contrast.test.ts; ratios below are WCAG 2.x. */
+  /* Paleta leve (spec 2026-10-09 §2): branco como base, navy como acento, laranja só em ações.
+     Todo par texto/fundo é verificado por tests/unit/ui/contrast.test.ts (WCAG AA ≥ 4,5:1). */
   --color-primary: #FA681F;
   --color-primary-hover: #E55A12;
   /* Pressed primary buttons switch to white text (5.2:1 on #C2410C). */
   --color-primary-active: #C2410C;
-  --color-primary-soft: #FFE4D3;
-  /* Navy text on solid orange: 5.6:1 on #FA681F, 4.6:1 on hover #E55A12. Darkened from the brand
-     navy #0D2A4D, which only reaches 4.0:1 on the hover orange. */
+  --color-primary-soft: #FFF1E8;
+  /* Navy text on solid orange: 5.6:1 on #FA681F, 4.6:1 on hover #E55A12 (the brand navy #0D2A4D only
+     reaches 4.0:1 on the hover orange). */
   --color-fg-on-primary: #071E3A;
-  /* Orange text on light surfaces: 5.7:1 on #FFFFFF, 4.7:1 on primary-soft. Darkened from #B9480F,
-     which only reaches 4.3:1 on primary-soft (badges, selected options, audit pills). */
+  /* Orange text on light surfaces: 5.7:1 on #FFFFFF, 5.2:1 on primary-soft. */
   --color-primary-text: #B0440E;
-  /* The sidebar (and the sign-in backdrop) stay navy in both themes. */
-  --color-sidebar: #0D2A4D;
-  --color-sidebar-fg: #F3F5F7;
-  /* Highlight band on navy: the active sidebar link. */
-  --color-navy: #125375;
-  /* Orange text on navy: 4.8:1 on the #125375 band, 8.3:1 on the sidebar. The solid #FA681F
-     only reaches 2.8:1 on the band, so it is kept for non-text marks there. */
-  --color-sidebar-accent: #FFB38A;
+  /* The icon rail (and the sign-in backdrop) stay navy in both themes. */
+  --color-rail: #0D2A4D;
+  --color-rail-fg: #F3F5F7;
+  /* Highlight band on the rail: the active icon. */
+  --color-rail-band: #1E3F66;
+  /* Orange on navy for the active icon: 8.3:1 on the rail, 6.2:1 on the band; the solid #FA681F is kept
+     for non-text marks there. */
+  --color-rail-accent: #FFB38A;
   --color-surface: #FFFFFF;
-  --color-surface-2: #FAFAF9;
-  --color-border: #E7E5E4;
-  --color-fg: #1C1917;
-  --color-fg-muted: #78716C;
+  --color-surface-2: #F6F8FA;
+  --color-border: #E6EAF0;
+  --color-fg: #1E293B;
+  --color-fg-strong: #0D2A4D;
+  /* 5.0:1 on #FFFFFF, 4.7:1 on surface-2, 4.5:1 on primary-soft (the selected row's subtitle). Darkened from
+     the spec's #64748B, which only reaches 4.47:1 on surface-2 and 4.31:1 on primary-soft. */
+  --color-fg-muted: #61708A;
   /* 6.5:1 on #FFFFFF and white on it. */
   --color-danger: #B91C1C;
-  /* White on it 5.4:1; 4.7:1 as text on its own 10% tint (the audit pills). Darkened from #15803D,
-     which only reaches 4.4:1 on that tint. */
+  --color-danger-soft: #FEF2F2;
+  /* White on it 5.4:1; 4.7:1 as text on its own 10% tint (the audit pills). */
   --color-success: #157B3B;
-  /* Text on solid danger/success fills (toasts, the danger button). */
+  --color-success-soft: #ECFDF3;
+  /* Text on solid danger/success fills (the danger button). */
   --color-fg-on-status: #FFFFFF;
+  --shadow-float: 0 10px 28px rgba(13, 42, 77, .14);
+  --gradient-hero: linear-gradient(160deg, #0D2A4D 0%, #125375 100%);
 }
 
 [data-theme="dark"] {
@@ -43,6 +48,7 @@
   --color-surface-2: #0C0A09;
   --color-border: #292524;
   --color-fg: #FAFAF9;
+  --color-fg-strong: #FFFFFF;
   --color-fg-muted: #A8A29E;
   --color-primary-soft: #431407;
   --color-fg-on-primary: #071E3A;
@@ -51,8 +57,11 @@
   /* Light red/green read on the dark surfaces (6.3:1 and 10.0:1 on #1C1917); text on their solid
      fills turns dark, since white only reaches 2.8:1 on #F87171. */
   --color-danger: #F87171;
+  --color-danger-soft: #450A0A;
   --color-success: #4ADE80;
+  --color-success-soft: #052E16;
   --color-fg-on-status: #1C1917;
+  --shadow-float: 0 10px 28px rgba(0, 0, 0, .5);
 }
 
 @theme inline {
@@ -62,20 +71,25 @@
   --color-primary-soft: var(--color-primary-soft);
   --color-fg-on-primary: var(--color-fg-on-primary);
   --color-primary-text: var(--color-primary-text);
-  --color-sidebar: var(--color-sidebar);
-  --color-sidebar-fg: var(--color-sidebar-fg);
-  --color-navy: var(--color-navy);
-  --color-sidebar-accent: var(--color-sidebar-accent);
+  --color-rail: var(--color-rail);
+  --color-rail-fg: var(--color-rail-fg);
+  --color-rail-band: var(--color-rail-band);
+  --color-rail-accent: var(--color-rail-accent);
   --color-surface: var(--color-surface);
   --color-surface-2: var(--color-surface-2);
   --color-border: var(--color-border);
   --color-fg: var(--color-fg);
+  --color-fg-strong: var(--color-fg-strong);
   --color-fg-muted: var(--color-fg-muted);
   --color-danger: var(--color-danger);
+  --color-danger-soft: var(--color-danger-soft);
   --color-success: var(--color-success);
+  --color-success-soft: var(--color-success-soft);
   --color-fg-on-status: var(--color-fg-on-status);
+  --shadow-float: var(--shadow-float);
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
 }
 
 html, body { height: 100%; }
-body { background: var(--color-surface-2); color: var(--color-fg); font-family: var(--font-sans); }
+body { background: var(--color-surface); color: var(--color-fg); font-family: var(--font-sans); }
+.bg-hero { background: var(--gradient-hero); }

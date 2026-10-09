@@ -273,7 +273,7 @@ function ShareRow({ share: s, self, busy, manageable, editAllowed, onChange, onR
       <div className="min-w-0">
         <p className="flex items-center gap-2 text-sm font-medium text-fg">
           <span className="truncate">{s.name.trim() || s.email}</span>
-          {self && <Badge className="shrink-0">{t.shareYou}</Badge>}
+          {self && <Badge tone="primary" className="shrink-0">{t.shareYou}</Badge>}
         </p>
         <p className="truncate text-xs text-fg-muted">{s.email}</p>
       </div>

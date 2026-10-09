@@ -164,7 +164,7 @@ export function FolderMembersDialog({ open, onClose, folder }: { open: boolean; 
                           </Button>
                         </div>
                       ) : (
-                        m.role === 'owner' ? <Badge>{ROLE_LABEL.owner}</Badge> : <span className={roleTag}>{ROLE_LABEL[m.role]}</span>
+                        m.role === 'owner' ? <Badge tone="primary">{ROLE_LABEL.owner}</Badge> : <span className={roleTag}>{ROLE_LABEL[m.role]}</span>
                       )}
                     </li>
                   );

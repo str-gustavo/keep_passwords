@@ -138,7 +138,7 @@ export function RecordForm({ mode, record, folderId = null, sharedFolderId = nul
                 <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
                   <TypeIcon type={typeDef.id} className="h-5 w-5" />
                 </span>
-                <Badge>{typeDef.label}</Badge>
+                <Badge tone="primary">{typeDef.label}</Badge>
                 {!editing && (
                   <Button type="button" variant="ghost" size="sm" className="ml-auto" onClick={() => setChoosingType(true)}>{t.changeType}</Button>
                 )}

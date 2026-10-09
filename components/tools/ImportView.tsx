@@ -121,7 +121,7 @@ export function ImportView() {
             <header className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-3">
               <FileUp className="h-5 w-5 text-primary" aria-hidden="true" />
               <h2 id="import-preview-title" className="text-sm font-semibold text-fg">{t.importPreview}</h2>
-              <Badge>{t.importDetected(FORMAT_LABELS[parsed.format])}</Badge>
+              <Badge tone="primary">{t.importDetected(FORMAT_LABELS[parsed.format])}</Badge>
               <span data-testid="import-preview-count" className="ml-auto text-sm font-medium text-fg">{t.importCount(plan.total)}</span>
             </header>
             <div className="overflow-x-auto">

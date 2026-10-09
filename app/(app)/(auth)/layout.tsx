@@ -9,9 +9,9 @@ import { t } from '@/lib/i18n/pt-br';
  */
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center bg-sidebar px-4 py-10">
+    <main className="flex min-h-screen flex-col items-center justify-center bg-rail px-4 py-10">
       <div className="w-full max-w-md">
-        <div className="mb-6 flex flex-col items-center text-center text-sidebar-fg">
+        <div className="mb-6 flex flex-col items-center text-center text-rail-fg">
           <NexusLock size={56} className="drop-shadow-lg" />
           <p className="mt-4 text-[1.75rem] leading-none">
             <span className="sr-only">{t.appName}</span>
@@ -22,7 +22,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
               <span className="font-medium tracking-tight">Passwords</span>
             </span>
           </p>
-          <p className="mt-2 text-sm text-sidebar-fg/80">{t.appTagline}</p>
+          <p className="mt-2 text-sm text-rail-fg/80">{t.appTagline}</p>
         </div>
         {children}
       </div>

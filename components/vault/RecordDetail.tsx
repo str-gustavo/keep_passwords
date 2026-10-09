@@ -38,7 +38,7 @@ export function RecordDetail({ record, ...handlers }: { record: VaultRecord } & 
               {data ? data.title.trim() || t.untitled : t.recordUnavailable}
             </h2>
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <Badge>{typeDef.label}</Badge>
+              <Badge tone="primary">{typeDef.label}</Badge>
               {record.ownerId !== userId && (
                 <span className={outlineBadge} title={record.ownerEmail}><Users className="h-3 w-3" aria-hidden="true" />{t.sharedBy} {record.ownerEmail}</span>
               )}

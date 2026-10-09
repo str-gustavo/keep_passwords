@@ -48,16 +48,20 @@ function over(fg: string, alpha: number, bg: string): string {
 
 describe('popup tokens', () => {
   it('are the web app’s shipped light tokens', () => {
-    const shared = ['primary', 'primary-hover', 'primary-active', 'primary-soft', 'fg-on-primary', 'primary-text', 'surface', 'surface-2', 'border', 'fg', 'fg-muted', 'danger', 'success'];
+    // The app's light redesign moved its neutrals (surface-2, border, fg, fg-muted) and primary-soft first; the popup
+    // takes the new values, and they rejoin this list, in the redesign's popup task.
+    const shared = ['primary', 'primary-hover', 'primary-active', 'fg-on-primary', 'primary-text', 'surface', 'danger', 'success'];
     expect(Object.fromEntries(shared.map((n) => [n, popup(n)]))).toEqual(Object.fromEntries(shared.map((n) => [n, app(n)])));
     expect(popup('primary-text')).toBe('#B0440E');
     expect(popup('success')).toBe('#157B3B');
-    // The popup header is the app's navy sidebar; its focus ring and links use the app's navy band.
-    expect(popupOnly('header')).toBe(app('sidebar'));
-    expect(popupOnly('header-fg')).toBe(app('sidebar-fg'));
-    expect(popupOnly('header-accent')).toBe(app('sidebar-accent'));
-    expect(popupOnly('focus')).toBe(app('navy'));
-    expect(popup('navy-light')).toBe(app('navy'));
+    // The popup header is the app's navy rail; its focus ring and links use #125375, the app's former navy band,
+    // which the app now ships only as the end of its sign-in hero gradient.
+    const heroEnd = /--gradient-hero:[^;]*(#[0-9A-Fa-f]{6})\s+100%/.exec(appCss)?.[1]?.toUpperCase();
+    expect(popupOnly('header')).toBe(app('rail'));
+    expect(popupOnly('header-fg')).toBe(app('rail-fg'));
+    expect(popupOnly('header-accent')).toBe(app('rail-accent'));
+    expect(popupOnly('focus')).toBe(heroEnd);
+    expect(popup('navy-light')).toBe(heroEnd);
   });
 
   it('every text/background pair the popup draws passes AA (>= 4.5:1)', () => {

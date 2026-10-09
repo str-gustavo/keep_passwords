@@ -38,91 +38,110 @@ function token(selector: string, name: string): string {
 /** A token as the theme resolves it: the dark block overrides :root, the rest is inherited. */
 const themed = (theme: 'light' | 'dark', name: string) => (theme === 'dark' ? find(DARK, name) : null) ?? token(ROOT, name);
 
-describe('WCAG AA contrast (spec §10, Nexus palette spec §3)', () => {
+describe('WCAG AA contrast (spec §10, light redesign spec §2)', () => {
   it('computes the reference ratios', () => {
     expect(contrast('#000000', '#FFFFFF')).toBeCloseTo(21, 5);
     expect(contrast('#FFFFFF', '#FFFFFF')).toBeCloseTo(1, 5);
     expect(over('#000000', 0.5, '#FFFFFF')).toBe('#808080');
   });
 
-  // The spec §3 pairs, with the shipped token values. Four spec values fell short and were adjusted
-  // (globals.css documents each): fg-on-primary #0D2A4D → #071E3A (4.0:1 on hover #E55A12),
-  // primary-text #B9480F → #B0440E (4.3:1 on #FFE4D3), success #15803D → #157B3B (4.4:1 on its 10% tint),
-  // and the active sidebar link uses sidebar-accent #FFB38A, since #FA681F is 2.8:1 on the #125375 band.
+  // The light redesign pairs (spec 2026-10-09 §2), with the shipped token values. Values carried over from the
+  // Nexus palette keep their adjustments: fg-on-primary #071E3A (the brand navy #0D2A4D is 4.0:1 on hover #E55A12),
+  // primary-text #B0440E, success #157B3B, and the active rail icon uses rail-accent #FFB38A, not the solid orange.
+  // One spec value fell short and was adjusted (globals.css documents it): fg-muted #64748B → #61708A, since
+  // #64748B is 4.47:1 on surface-2 #F6F8FA and 4.31:1 on primary-soft #FFF1E8 (the selected row's subtitle).
   it.each([
-    ['navy text on solid orange', '#071E3A', '#FA681F'],
-    ['navy text on hover orange', '#071E3A', '#E55A12'],
-    ['white text on pressed orange', '#FFFFFF', '#C2410C'],
-    ['orange text on white (light)', '#B0440E', '#FFFFFF'],
-    ['orange text on primary-soft (light)', '#B0440E', '#FFE4D3'],
-    ['orange text on the dark surface', '#FFB38A', '#1C1917'],
-    ['orange text on primary-soft (dark)', '#FFB38A', '#431407'],
-    ['white text on success (light)', '#FFFFFF', '#157B3B'],
-    ['success text on white (light)', '#157B3B', '#FFFFFF'],
-    ['danger text on white (light)', '#B91C1C', '#FFFFFF'],
-    ['white text on danger (light)', '#FFFFFF', '#B91C1C'],
-    ['danger text on the dark surface', '#F87171', '#1C1917'],
-    ['dark text on danger (dark)', '#1C1917', '#F87171'],
-    ['success text on the dark surface', '#4ADE80', '#1C1917'],
-    ['dark text on success (dark)', '#1C1917', '#4ADE80'],
-    ['light text on the navy sidebar', '#F3F5F7', '#0D2A4D'],
-    ['orange on the navy sidebar', '#FA681F', '#0D2A4D'],
-    ['light text on the navy band', '#F3F5F7', '#125375'],
-    ['sidebar accent on the navy band (active link)', '#FFB38A', '#125375'],
-    ['light text on the dark surface', '#FAFAF9', '#1C1917'],
-  ])('%s is at least 4.5:1', (_label, fg, bg) => {
+    ['texto sobre branco', '#1E293B', '#FFFFFF'],
+    ['títulos sobre branco', '#0D2A4D', '#FFFFFF'],
+    ['texto secundário sobre branco', '#61708A', '#FFFFFF'],
+    ['texto secundário sobre surface-2', '#61708A', '#F6F8FA'],
+    ['navy sobre laranja', '#071E3A', '#FA681F'],
+    ['navy sobre laranja hover', '#071E3A', '#E55A12'],
+    ['branco sobre laranja pressionado', '#FFFFFF', '#C2410C'],
+    ['laranja-texto sobre branco', '#B0440E', '#FFFFFF'],
+    ['laranja-texto sobre primary-soft', '#B0440E', '#FFF1E8'],
+    ['texto sobre primary-soft (linha selecionada)', '#1E293B', '#FFF1E8'],
+    ['sucesso sobre branco', '#157B3B', '#FFFFFF'],
+    ['sucesso sobre success-soft', '#157B3B', '#ECFDF3'],
+    ['perigo sobre branco', '#B91C1C', '#FFFFFF'],
+    ['perigo sobre danger-soft', '#B91C1C', '#FEF2F2'],
+    ['ícones do trilho sobre navy', '#F3F5F7', '#0D2A4D'],
+    ['ícone ativo do trilho sobre navy', '#FFB38A', '#0D2A4D'],
+    ['ícone ativo sobre a faixa do trilho', '#FFB38A', '#1E3F66'],
+    ['texto claro sobre o hero (fim do gradiente)', '#DCE6F0', '#125375'],
+    ['branco sobre o hero (fim do gradiente)', '#FFFFFF', '#125375'],
+    ['texto escuro (dark) sobre surface', '#FAFAF9', '#1C1917'],
+    ['títulos (dark) sobre surface', '#FFFFFF', '#1C1917'],
+    ['laranja-texto (dark) sobre primary-soft', '#FFB38A', '#431407'],
+    ['sucesso (dark) sobre success-soft (dark)', '#4ADE80', '#052E16'],
+    ['perigo (dark) sobre danger-soft (dark)', '#F87171', '#450A0A'],
+  ])('%s é pelo menos 4,5:1', (_label, fg, bg) => {
     expect(contrast(fg, bg)).toBeGreaterThanOrEqual(4.5);
   });
 
-  it('the theme tokens hold the Nexus palette', () => {
-    const names = ['primary', 'primary-hover', 'primary-active', 'primary-soft', 'fg-on-primary', 'primary-text', 'sidebar', 'sidebar-fg', 'navy', 'sidebar-accent', 'danger', 'success', 'fg-on-status'] as const;
+  it('os tokens do tema carregam a paleta leve', () => {
+    const names = ['primary', 'primary-hover', 'primary-active', 'primary-soft', 'fg-on-primary', 'primary-text', 'rail', 'rail-fg', 'rail-band', 'rail-accent', 'surface', 'surface-2', 'border', 'fg', 'fg-strong', 'fg-muted', 'danger', 'danger-soft', 'success', 'success-soft', 'fg-on-status'] as const;
     const read = (theme: 'light' | 'dark') => Object.fromEntries(names.map((n) => [n, themed(theme, `--color-${n}`)]));
     expect(read('light')).toEqual({
-      primary: '#FA681F', 'primary-hover': '#E55A12', 'primary-active': '#C2410C', 'primary-soft': '#FFE4D3',
-      'fg-on-primary': '#071E3A', 'primary-text': '#B0440E', sidebar: '#0D2A4D', 'sidebar-fg': '#F3F5F7', navy: '#125375',
-      'sidebar-accent': '#FFB38A', danger: '#B91C1C', success: '#157B3B', 'fg-on-status': '#FFFFFF',
+      primary: '#FA681F', 'primary-hover': '#E55A12', 'primary-active': '#C2410C', 'primary-soft': '#FFF1E8',
+      'fg-on-primary': '#071E3A', 'primary-text': '#B0440E', rail: '#0D2A4D', 'rail-fg': '#F3F5F7', 'rail-band': '#1E3F66',
+      'rail-accent': '#FFB38A', surface: '#FFFFFF', 'surface-2': '#F6F8FA', border: '#E6EAF0', fg: '#1E293B', 'fg-strong': '#0D2A4D',
+      'fg-muted': '#61708A', danger: '#B91C1C', 'danger-soft': '#FEF2F2', success: '#157B3B', 'success-soft': '#ECFDF3', 'fg-on-status': '#FFFFFF',
     });
     expect(read('dark')).toMatchObject({
-      primary: '#FA681F', 'primary-hover': '#E55A12', 'primary-active': '#C2410C', 'primary-soft': '#431407',
-      'fg-on-primary': '#071E3A', 'primary-text': '#FFB38A', sidebar: '#0D2A4D', navy: '#125375',
-      danger: '#F87171', success: '#4ADE80', 'fg-on-status': '#1C1917',
+      surface: '#1C1917', 'surface-2': '#0C0A09', border: '#292524', fg: '#FAFAF9', 'fg-strong': '#FFFFFF', 'fg-muted': '#A8A29E',
+      'primary-soft': '#431407', 'primary-text': '#FFB38A', danger: '#F87171', 'danger-soft': '#450A0A', success: '#4ADE80', 'success-soft': '#052E16',
+      rail: '#0D2A4D', 'rail-accent': '#FFB38A',
     });
+  });
+  it('os tokens antigos de sidebar não existem mais', () => {
+    expect(find(ROOT, '--color-sidebar')).toBeNull();
+    expect(find(ROOT, '--color-navy')).toBeNull();
   });
 
   it.each(['light', 'dark'] as const)('every text/background pair the UI draws passes AA (%s theme)', (theme) => {
     const c = (n: string) => themed(theme, `--color-${n}`);
-    const [surface, surface2, sidebar] = [c('surface'), c('surface-2'), c('sidebar')];
+    const [surface, surface2, rail] = [c('surface'), c('surface-2'), c('rail')];
     const pairs: [string, string, string][] = [
       // Primary buttons: rest, hover, pressed (`active:text-white`).
       ['fg-on-primary on primary', c('fg-on-primary'), c('primary')],
       ['fg-on-primary on primary-hover', c('fg-on-primary'), c('primary-hover')],
       ['white on primary-active', '#FFFFFF', c('primary-active')],
-      // Orange links, badges, selected options.
+      // Orange links, ghost buttons, primary badges, selected rows and hovered menu items.
       ['primary-text on surface', c('primary-text'), surface],
       ['primary-text on surface-2', c('primary-text'), surface2],
       ['primary-text on primary-soft', c('primary-text'), c('primary-soft')],
       ['fg on primary-soft', c('fg'), c('primary-soft')],
-      // Body text.
+      ['fg-muted on primary-soft (selected row subtitle)', c('fg-muted'), c('primary-soft')],
+      ['danger on primary-soft (hovered danger menu item)', c('danger'), c('primary-soft')],
+      // Body text, titles and secondary text (neutral badges are fg-muted on surface-2).
       ['fg on surface', c('fg'), surface],
+      ['fg on surface-2', c('fg'), surface2],
+      ['fg-strong on surface', c('fg-strong'), surface],
+      ['fg-strong on surface-2', c('fg-strong'), surface2],
       ['fg-muted on surface', c('fg-muted'), surface],
       ['fg-muted on surface-2', c('fg-muted'), surface2],
-      // Danger/success: text, 10% tints (alerts, audit pills), solid fills (toasts, danger button at rest and hover:opacity-90).
+      // Danger/success: text, soft tints (badges, notices), 10% tints (alerts, audit pills),
+      // solid fills (the danger button at rest and hover:opacity-90).
       ['danger on surface', c('danger'), surface],
       ['danger on surface-2', c('danger'), surface2],
+      ['danger on danger-soft', c('danger'), c('danger-soft')],
       ['danger on its 10% tint', c('danger'), over(c('danger'), 0.1, surface)],
       ['fg-on-status on danger', c('fg-on-status'), c('danger')],
       ['fg-on-status on danger at 90%', c('fg-on-status'), over(c('danger'), 0.9, surface)],
       ['success on surface', c('success'), surface],
       ['success on surface-2', c('success'), surface2],
+      ['success on success-soft', c('success'), c('success-soft')],
       ['success on its 10% tint', c('success'), over(c('success'), 0.1, surface)],
       ['fg-on-status on success', c('fg-on-status'), c('success')],
-      // Navy sidebar and sign-in backdrop (the same in both themes).
-      ['sidebar-fg on sidebar', c('sidebar-fg'), sidebar],
-      ['sidebar-fg at 60% on sidebar', over(c('sidebar-fg'), 0.6, sidebar), sidebar],
-      ['primary on sidebar', c('primary'), sidebar],
-      ['sidebar-fg on the navy band', c('sidebar-fg'), c('navy')],
-      ['sidebar-accent on the navy band (active link)', c('sidebar-accent'), c('navy')],
-      ['sidebar-accent on the avatar (primary/20 on sidebar)', c('sidebar-accent'), over(c('primary'), 0.2, sidebar)],
+      // The navy rail and the sign-in backdrop (the same in both themes).
+      ['rail-fg on rail', c('rail-fg'), rail],
+      ['rail-fg at 60% on rail', over(c('rail-fg'), 0.6, rail), rail],
+      ['primary on rail', c('primary'), rail],
+      ['rail-accent on rail', c('rail-accent'), rail],
+      ['rail-fg on the rail band', c('rail-fg'), c('rail-band')],
+      ['rail-accent on the rail band (active icon)', c('rail-accent'), c('rail-band')],
+      ['rail-accent on the avatar (primary/20 on rail)', c('rail-accent'), over(c('primary'), 0.2, rail)],
     ];
     for (const [label, fg, bg] of pairs) expect(contrast(fg, bg), `${label}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
   });
