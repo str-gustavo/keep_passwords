@@ -134,7 +134,7 @@ export const BAR_CSS = `${HOST}
 .bar.saved { background: ${P.success}; border-bottom-color: ${P.success}; justify-content: center; }
 .mark { display: block; line-height: 0; }
 .text { display: flex; flex-direction: column; gap: 2px; flex: 1 1 240px; min-width: 0; }
-.question { display: block; margin: 0; font-size: 14px; font-weight: 600; color: ${P.white}; }
+.question { display: block; margin: 0; font-size: 14px; font-weight: 600; color: ${P.white}; overflow-wrap: anywhere; }
 .detail { display: block; margin: 0; color: ${P.muted}; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .title {
   all: unset; box-sizing: border-box; flex: 0 1 240px; min-width: 120px; height: 32px; padding: 0 10px; border-radius: 8px;

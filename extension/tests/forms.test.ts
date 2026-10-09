@@ -147,6 +147,26 @@ describe('detectForms', () => {
     expect(detectForms(document)).toEqual([]); // the light tree has no password field
   });
 
+  it('wasPassword: a password field flipped to type=text (show password) still counts, only when asked', () => {
+    html(`<form><input type="email" id="u"><input type="text" id="p" name="code"><input type="text" id="t"></form>`);
+    const flipped = new Set([byId('p')]);
+    expect(detectForms(document)).toEqual([]);
+    const [f] = detectForms(document, { wasPassword: (el) => flipped.has(el) });
+    expect(f?.kind).toBe('login');
+    expect(f?.passwordFields.map((p) => p.id)).toEqual(['p']);
+    expect(f?.usernameField?.id).toBe('u');
+    expect(f?.otpField).toBeNull(); // a former password field is never the OTP field
+    byId('p').type = 'hidden';
+    expect(detectForms(document, { wasPassword: (el) => flipped.has(el) })).toEqual([]); // only type=text is a flip
+  });
+
+  it('wasPassword: a flipped field is never another group\'s username', () => {
+    html(`<div><input type="text" id="old"><input type="password" id="p"></div>`);
+    const [f] = detectForms(document, { wasPassword: (el) => el.id === 'old' });
+    expect(f?.passwordFields.map((p) => p.id)).toEqual(['old', 'p']);
+    expect(f?.usernameField).toBeNull();
+  });
+
   it('detection does not mutate the DOM', () => {
     html(`<form><input type="email" value="x"><input type="password"><input type="password"></form><input name="otp">`);
     const before = document.body.innerHTML;

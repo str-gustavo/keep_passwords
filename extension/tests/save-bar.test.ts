@@ -5,7 +5,7 @@ vi.mock('@/shared/messages', () => ({ send: vi.fn() }));
 
 import { send } from '@/shared/messages';
 import { allowSyntheticEvents, shadowOf } from '@/content/host';
-import { hideSaveBar, PENDING_RECHECK_MS, SAVED_MS, showSaveBar, startSaveBar, startSaveFlow } from '@/content/save-bar';
+import { ANNOUNCE_DELAY_MS, hideSaveBar, PENDING_RECHECK_MS, SAVED_MS, showSaveBar, startSaveBar, startSaveFlow } from '@/content/save-bar';
 import { BAR_CSS, PALETTE } from '@/content/styles';
 import { resetChromeMock } from './helpers/chrome-mock';
 
@@ -32,6 +32,7 @@ const barText = () => barRoot().textContent ?? '';
 const barButton = (label: string) => Array.from(barRoot().querySelectorAll('button')).find((b) => b.textContent === label);
 const titleInput = () => barRoot().querySelector('input');
 const alertText = () => barRoot().querySelector('[role="alert"]')?.textContent ?? '';
+const liveText = () => barRoot().querySelector('[role="status"]')?.textContent ?? '';
 const key = (target: EventTarget, k: string) => target.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, composed: true, cancelable: true }));
 
 let stop: (() => void) | null = null;
@@ -56,7 +57,7 @@ describe('asking for a capture', () => {
   it('asks getPending on load and once more 1.5 s later in the top frame; nothing pending → no bar', async () => {
     vi.useFakeTimers();
     respond({ getPending: () => null });
-    stop = startSaveBar(document, () => true);
+    stop = startSaveBar(document, () => true).stop;
     await flush();
     expect(sent('getPending')).toHaveLength(1);
     await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS);
@@ -70,7 +71,7 @@ describe('asking for a capture', () => {
     vi.useFakeTimers();
     let answer: PendingSummary | null = null;
     respond({ getPending: () => answer });
-    stop = startSaveBar(document, () => true);
+    stop = startSaveBar(document, () => true).stop;
     await flush();
     expect(barHost()).toBeNull();
     answer = summary();
@@ -81,7 +82,7 @@ describe('asking for a capture', () => {
   it('does not ask again once the first check showed the bar', async () => {
     vi.useFakeTimers();
     respond({ getPending: () => summary() });
-    stop = startSaveBar(document, () => true);
+    stop = startSaveBar(document, () => true).stop;
     await flush();
     expect(barHost()).not.toBeNull();
     await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS);
@@ -90,12 +91,12 @@ describe('asking for a capture', () => {
 
   it('never asks in a sub-frame, and a failing getPending shows nothing', async () => {
     respond({ getPending: () => summary() });
-    stop = startSaveBar(document, () => false);
+    stop = startSaveBar(document, () => false).stop;
     await flush();
     expect(sendMock).not.toHaveBeenCalled();
     stop();
     sendMock.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
-    stop = startSaveBar(document, () => true);
+    stop = startSaveBar(document, () => true).stop;
     await flush();
     expect(barHost()).toBeNull();
   });
@@ -119,6 +120,123 @@ describe('asking for a capture', () => {
   });
 });
 
+describe('asking again after a capture (logins that never reload)', () => {
+  const FORM = `<form><input id="u" name="login" value="ana"><input type="password" id="p"></form>`;
+  const field = () => document.getElementById('p') as HTMLInputElement;
+  let answer: PendingSummary | null = null;
+  beforeEach(() => {
+    vi.useFakeTimers();
+    answer = null;
+    respond({
+      getPending: () => answer,
+      savePending: () => { answer = summary(); return null; },
+      discardPending: () => { answer = null; return null; },
+    });
+  });
+  /** The user submits the form; the SPA then replaces it (a successful login) unless `stay`. */
+  async function submitLogin(password: string, stay = false): Promise<void> {
+    if (!document.getElementById('p')) document.body.innerHTML = FORM;
+    field().value = password;
+    key(field(), 'Enter');
+    await flush(); // savePending answered
+    if (!stay) document.querySelector('form')!.remove();
+  }
+  async function loaded(isTop = true): Promise<void> {
+    document.body.innerHTML = FORM;
+    stop = startSaveFlow(document, () => isTop);
+    await vi.advanceTimersByTimeAsync(PENDING_RECHECK_MS); // the load asks: nothing yet
+  }
+
+  it('a trusted Enter, savePending resolved, the form gone: the bar 1.5 s later', async () => {
+    await loaded();
+    expect(sent('getPending')).toHaveLength(2);
+    await submitLogin(SECRET);
+    await vi.advanceTimersByTimeAsync(1499);
+    expect(barHost()).toBeNull();
+    await vi.advanceTimersByTimeAsync(1);
+    await flush();
+    expect(barText()).toContain('Salvar no Nexus Passwords?');
+    expect(sent('getPending')).toHaveLength(3);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent('getPending')).toHaveLength(3); // offered: the 4 s ask does nothing
+  });
+
+  it('the 1.5 s ask finds nothing yet, the 4 s one shows the bar', async () => {
+    await loaded();
+    respond({ getPending: () => answer, savePending: () => null });
+    await submitLogin(SECRET);
+    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
+    expect(sent('getPending')).toHaveLength(3);
+    expect(barHost()).toBeNull();
+    answer = summary();
+    await vi.advanceTimersByTimeAsync(2500);
+    await flush();
+    expect(barHost()).not.toBeNull();
+  });
+
+  it('a rejected savePending asks nothing more', async () => {
+    await loaded();
+    respond({ getPending: () => summary(), savePending: () => { throw new Error('Could not establish connection.'); } });
+    await submitLogin(SECRET);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent('getPending')).toHaveLength(2);
+    expect(barHost()).toBeNull();
+  });
+
+  it('no ask while the captured field still holds the password on screen (a failed login)', async () => {
+    await loaded();
+    await submitLogin(SECRET, true);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent('getPending')).toHaveLength(2);
+    expect(barHost()).toBeNull();
+  });
+
+  it('dismissed, then another capture: the bar again', async () => {
+    await loaded();
+    await submitLogin(SECRET);
+    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
+    barButton('Agora não')!.click();
+    await flush();
+    expect(barHost()).toBeNull();
+    await submitLogin(`${SECRET}2`);
+    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
+    expect(barHost()).not.toBeNull();
+  });
+
+  it('a bar already up and idle shows the newer capture instead of a second bar', async () => {
+    answer = summary();
+    await loaded();
+    expect(barText()).toContain('Salvar no Nexus Passwords?');
+    const host = barHost();
+    respond({ getPending: () => answer, savePending: () => { answer = summary({ kind: 'update', existingId: 'r1', existingTitle: 'GitHub' }); return null; } });
+    await submitLogin(SECRET);
+    await vi.advanceTimersByTimeAsync(1500);
+    await flush();
+    expect(barHost()).toBe(host); // the same bar, re-rendered
+    expect(barText()).toContain('Atualizar a senha de GitHub?');
+  });
+
+  it('a sub-frame captures but never asks', async () => {
+    await loaded(false);
+    await submitLogin(SECRET);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent('savePending')).toHaveLength(1);
+    expect(sent('getPending')).toHaveLength(0);
+  });
+
+  it('stop cancels the asks still scheduled', async () => {
+    await loaded();
+    await submitLogin(SECRET);
+    stop!();
+    stop = null;
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent('getPending')).toHaveLength(2);
+  });
+});
+
 describe('save bar: new login', () => {
   it('a navy bar at the top in a closed shadow root: the question, the host as title, the login, three actions', () => {
     respond({});
@@ -134,6 +252,17 @@ describe('save bar: new login', () => {
     expect(['Salvar', 'Agora não', 'Nunca para este site'].map((l) => barButton(l) !== undefined)).toEqual([true, true, true]);
   });
 
+  it('is announced: the role=status live region is mounted empty and gets the question after mount', async () => {
+    vi.useFakeTimers();
+    respond({});
+    showSaveBar(document, summary());
+    expect(barRoot().querySelectorAll('[role="status"]')).toHaveLength(1);
+    expect(liveText()).toBe('');
+    expect(barRoot().querySelector('.question')!.getAttribute('aria-hidden')).toBe('true'); // read once, from the live region
+    await vi.advanceTimersByTimeAsync(ANNOUNCE_DELAY_MS);
+    expect(liveText()).toBe('Salvar no Nexus Passwords?');
+  });
+
   it('"Salvar" sends only the edited title, turns green "Salvo!" and goes away after 2 s', async () => {
     vi.useFakeTimers();
     respond({ saveNew: () => ({ id: 'new-id' }) });
@@ -142,11 +271,13 @@ describe('save bar: new login', () => {
     barButton('Salvar')!.click();
     await flush();
     expect(sent('saveNew')).toEqual([{ type: 'saveNew', title: 'Meu site' }]);
-    expect(barRoot().querySelector('[role="status"]')!.textContent).toBe('Salvo!'); // the live region's text changes
+    expect(barRoot().querySelector('.question')!.textContent).toBe('Salvo!');
     expect(barRoot().querySelector('.bar.saved')).not.toBeNull();
     expect(barRoot().querySelectorAll('button, input')).toHaveLength(0);
     expect(barText()).not.toContain('ana@nexus.com');
-    await vi.advanceTimersByTimeAsync(SAVED_MS - 1);
+    await vi.advanceTimersByTimeAsync(ANNOUNCE_DELAY_MS);
+    expect(liveText()).toBe('Salvo!'); // the live region's text changes: announced
+    await vi.advanceTimersByTimeAsync(SAVED_MS - ANNOUNCE_DELAY_MS - 1);
     expect(barHost()).not.toBeNull();
     await vi.advanceTimersByTimeAsync(1);
     expect(barHost()).toBeNull();
@@ -338,6 +469,7 @@ describe('save bar: look', () => {
     expect(BAR_CSS).toContain(`background: ${PALETTE.navy}; color: ${PALETTE.white};`);
     expect(BAR_CSS).toContain(`.btn.primary { background: ${PALETTE.orange}; color: ${PALETTE.onOrange}; }`);
     expect(BAR_CSS).toContain(`.bar.saved { background: ${PALETTE.success};`);
+    expect(BAR_CSS).toMatch(/\.question \{[^}]*overflow-wrap: anywhere;/);
     expect(PALETTE.onOrange).toBe('#071E3A');
     for (const [fg, bg] of [[PALETTE.white, PALETTE.navy], [PALETTE.white, PALETTE.success], [PALETTE.fg, PALETTE.navyLight], [PALETTE.onOrange, PALETTE.orange]] as const) {
       expect(contrast(fg, bg), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);

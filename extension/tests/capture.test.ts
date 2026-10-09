@@ -246,6 +246,52 @@ describe('which password', () => {
     expect(captures().map((c) => c.password)).toEqual([SECRET, NEW_SECRET]);
   });
 
+  it('form-less fields: a type-less button in the password field\'s own wrapper (show password) or outside the fields does not capture', () => {
+    start(`<header><button id="menu">Menu</button></header>
+           <div class="login"><input id="u" name="login"><div class="pw"><input type="password" id="p"><button id="eye">👁</button></div><div class="row"><button id="go"><span id="label">Entrar</span></button></div></div>`);
+    type('u', 'ana');
+    type('p', 'S3cr');
+    byId('eye').click();
+    byId('menu').click();
+    expect(captures()).toHaveLength(0);
+    type('p', SECRET);
+    document.getElementById('label')!.click();
+    expect(captures().map((c) => c.password)).toEqual([SECRET]);
+  });
+
+  it('form-less password field alone: no click captures (no fields to scope a button), Enter still does', () => {
+    start(`<div><input type="password" id="p"><button id="go">Continuar</button></div>`);
+    type('p', SECRET);
+    byId('go').click();
+    expect(captures()).toHaveLength(0);
+    enter(byId('p'));
+    expect(captures()).toHaveLength(1);
+  });
+
+  it('a password field flipped to type=text by a show-password toggle is still read', () => {
+    start(LOGIN);
+    type('u', 'ana');
+    type('p', SECRET);
+    byId('p').dispatchEvent(new Event('input', { bubbles: true, composed: true })); // the user typed in it as a password field
+    byId('p').type = 'text';
+    byId('go').click();
+    expect(captures()).toEqual([{ type: 'savePending', url: location.origin, login: 'ana', password: SECRET }]);
+  });
+
+  it('focus alone is enough to remember a password field; an input never seen as one is not read', () => {
+    start(`<form><input id="u" name="login"><input type="password" id="p"><input type="text" id="t"><button id="go">Entrar</button></form>`);
+    byId('p').dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    byId('p').type = 'text';
+    type('p', SECRET);
+    byId('go').click();
+    expect(captures().map((c) => c.password)).toEqual([SECRET]);
+    sendMock.mockClear();
+    document.body.innerHTML = `<form><input id="u" name="login"><input type="text" id="t"><button id="go">Entrar</button></form>`;
+    type('t', 'not-a-password');
+    byId('go').click();
+    expect(captures()).toHaveLength(0);
+  });
+
   it('a submit control of another form does not capture this one', () => {
     start(`${LOGIN}<form><input id="q" name="q"><button id="search">Buscar</button></form>`);
     type('p', SECRET);
@@ -262,6 +308,44 @@ describe('which password', () => {
     (shadow.getElementById('p') as HTMLInputElement).value = SECRET;
     shadow.getElementById('p')!.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, composed: true }));
     expect(captures()).toEqual([{ type: 'savePending', url: location.origin, login: 'ana', password: SECRET }]);
+  });
+});
+
+describe('onCaptured', () => {
+  it('is called with the captured field once savePending resolves; never on a rejection or a duplicate', async () => {
+    let fail = false;
+    sendMock.mockImplementation(async () => { if (fail) throw new Error('Could not establish connection.'); return null as never; });
+    document.body.innerHTML = LOGIN;
+    const onCaptured = vi.fn();
+    uninstall = installCapture(document, onCaptured);
+    type('p', SECRET);
+    enter(byId('p'));
+    expect(onCaptured).not.toHaveBeenCalled(); // not before the service worker answered
+    await flush();
+    expect(onCaptured).toHaveBeenCalledTimes(1);
+    expect(onCaptured).toHaveBeenCalledWith(byId('p'));
+    enter(byId('p')); // duplicate: not sent
+    await flush();
+    expect(onCaptured).toHaveBeenCalledTimes(1);
+    fail = true;
+    type('p', NEW_SECRET);
+    enter(byId('p'));
+    await flush();
+    expect(captures()).toHaveLength(2);
+    expect(onCaptured).toHaveBeenCalledTimes(1);
+  });
+
+  it('a throwing callback does not surface', async () => {
+    const onUnhandled = vi.fn();
+    process.on('unhandledRejection', onUnhandled);
+    document.body.innerHTML = LOGIN;
+    uninstall = installCapture(document, () => { throw new Error('boom'); });
+    type('p', SECRET);
+    enter(byId('p'));
+    await flush();
+    await new Promise((r) => setTimeout(r, 0));
+    process.off('unhandledRejection', onUnhandled);
+    expect(onUnhandled).not.toHaveBeenCalled();
   });
 });
 

@@ -7,6 +7,7 @@
  * menu, it acts only on real clicks on a bar the page left visible; saving and updating also wait for Chrome's
  * IntersectionObserver v2 to vouch for it (a page hiding the bar under a decoy must not get "Atualizar" clicked).
  */
+import { isVisible } from '@/shared/forms';
 import { send, type OpenPopupResult, type PendingSummary } from '@/shared/messages';
 import { lockIcon } from './brand';
 import { installCapture } from './capture';
@@ -15,10 +16,14 @@ import { createOverlay, engineReportsHidden, h, isUserEvent, overlayVisible, rem
 import { errorText, T } from './strings';
 import { BAR_CSS } from './styles';
 
-/** The second getPending, for a capture the service worker stored only after the first answered (fast navigations). */
+/** The second getPending after load, for a capture the service worker stored only after the first answered. */
 export const PENDING_RECHECK_MS = 1500;
+/** After a capture in this page (logins that never reload): ask at these delays. */
+export const CAPTURE_RECHECK_MS = [1500, 4000] as const;
 /** How long the green "Salvo!" stays before the bar goes away. */
 export const SAVED_MS = 2000;
+/** The live region gets its text this long after it is mounted (empty), so screen readers announce the change. */
+export const ANNOUNCE_DELAY_MS = 100;
 /** The service worker refuses longer titles. */
 const TITLE_MAX = 500;
 
@@ -41,15 +46,19 @@ type Run = () => Promise<void> | void;
 export class SaveBar {
   readonly host: HTMLElement;
   private readonly panel: HTMLElement;
+  /** Screen-reader announcements: mounted empty, filled after ANNOUNCE_DELAY_MS (a change, not an insertion). */
+  private readonly live: HTMLElement;
   private readonly win: Window;
   private status: HTMLElement | null = null;
-  /** The question line (a polite live region): "Salvo!" replaces its text, so it is announced. */
+  /** The visible question line ("Salvo!" replaces its text). */
   private question: HTMLElement | null = null;
   private buttons: HTMLButtonElement[] = [];
   private summary: PendingSummary;
   private busy = false;
   private isClosed = false;
+  private isSaved = false;
   private savedTimer: ReturnType<typeof setTimeout> | undefined;
+  private announceTimer: ReturnType<typeof setTimeout> | undefined;
 
   constructor(private readonly doc: Document, summary: PendingSummary) {
     this.win = doc.defaultView ?? window;
@@ -58,7 +67,8 @@ export class SaveBar {
     this.host = host;
     this.panel = h(doc, 'div', { class: 'surface bar', attrs: { role: 'region', 'aria-label': T.appName, tabindex: '-1' } });
     this.panel.addEventListener('keydown', this.onKeyDown);
-    root.append(this.panel);
+    this.live = h(doc, 'p', { class: 'sr-only', attrs: { role: 'status' } });
+    root.append(this.panel, this.live);
     this.win.addEventListener('focus', this.onWindowFocus);
     this.render(summary);
   }
@@ -67,10 +77,21 @@ export class SaveBar {
     return this.isClosed;
   }
 
+  /** Up, not running an action and not showing "Salvo!": it may show another capture. */
+  get idle(): boolean {
+    return !this.isClosed && !this.busy && !this.isSaved;
+  }
+
+  /** Shows `summary` instead (a newer capture), when idle. */
+  update(summary: PendingSummary): void {
+    if (this.idle) this.render(summary);
+  }
+
   close(): void {
     if (this.isClosed) return;
     this.isClosed = true;
     clearTimeout(this.savedTimer);
+    clearTimeout(this.announceTimer);
     this.win.removeEventListener('focus', this.onWindowFocus);
     removeOverlay(this.host);
     if (current === this) current = null;
@@ -89,7 +110,7 @@ export class SaveBar {
       actions = [this.button(T.unlockShort, 'primary', this.unlock), this.button(T.notNow, 'secondary', this.notNow)];
     } else if (s.kind === 'update') {
       questionText = T.updateQuestion(s.existingTitle || s.title);
-      actions = [this.button(T.update, 'primary', this.update, true), this.button(T.notNow, 'secondary', this.notNow)];
+      actions = [this.button(T.update, 'primary', this.updateRecord, true), this.button(T.notNow, 'secondary', this.notNow)];
     } else {
       questionText = T.saveQuestion;
       title = h(doc, 'input', { class: 'title', attrs: { type: 'text', 'aria-label': T.recordTitle, maxlength: String(TITLE_MAX), autocomplete: 'off', spellcheck: 'false' } });
@@ -110,8 +131,8 @@ export class SaveBar {
     this.status = h(doc, 'p', { class: 'status', attrs: { role: 'alert' } });
     const keepFocus = doc.activeElement === this.host;
     if (keepFocus) this.panel.focus({ preventScroll: true }); // a removed focused button would drop focus to <body>
-    this.panel.classList.remove('saved');
-    this.question = h(doc, 'p', { class: 'question', text: questionText, attrs: { role: 'status' } });
+    // Visible copy only: screen readers get the question from the live region (no double reading).
+    this.question = h(doc, 'p', { class: 'question', text: questionText, attrs: { 'aria-hidden': 'true' } });
     const parts: HTMLElement[] = [
       h(doc, 'span', { class: 'mark' }, [lockIcon(doc, 24)]),
       h(doc, 'div', { class: 'text' }, [this.question, h(doc, 'p', { class: 'detail', text: T.loginLine(s.login) })]),
@@ -119,6 +140,12 @@ export class SaveBar {
     if (title) parts.push(title);
     parts.push(h(doc, 'div', { class: 'actions' }, actions), this.status);
     this.panel.replaceChildren(...parts);
+    this.announce(questionText);
+  }
+
+  private announce(text: string): void {
+    clearTimeout(this.announceTimer);
+    this.announceTimer = setTimeout(() => { if (!this.isClosed) this.live.textContent = text; }, ANNOUNCE_DELAY_MS);
   }
 
   private button(label: string, variant: 'primary' | 'secondary' | 'link', run: Run, sensitive = false): HTMLButtonElement {
@@ -172,7 +199,7 @@ export class SaveBar {
     this.saved();
   };
 
-  private readonly update = async (): Promise<void> => {
+  private readonly updateRecord = async (): Promise<void> => {
     const id = this.summary.existingId;
     if (!id) throw new Error(T.generic);
     await send({ type: 'updatePassword', id });
@@ -195,16 +222,18 @@ export class SaveBar {
     if (!res?.opened) this.say(T.toolbarHint, false);
   };
 
-  /** Green "Salvo!" (in the question's live region, without the login and the actions), then gone. */
+  /** Green "Salvo!" (without the login and the actions; announced), then gone. */
   private saved(): void {
     const question = this.question;
     if (this.isClosed || !question) return;
     if (this.doc.activeElement === this.host) this.panel.focus({ preventScroll: true });
+    this.isSaved = true;
     this.buttons = [];
     this.status = null;
     this.panel.classList.add('saved');
     for (const el of Array.from(this.panel.querySelectorAll('.detail, .title, .actions, .status'))) el.remove();
     question.textContent = T.saved;
+    this.announce(T.saved);
     this.savedTimer = setTimeout(() => this.close(), SAVED_MS);
   }
 
@@ -212,7 +241,7 @@ export class SaveBar {
   private readonly onKeyDown = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape' || !isUserEvent(e) || this.busy) return;
     e.preventDefault();
-    if (this.buttons.length === 0) this.close();
+    if (this.isSaved) this.close();
     else this.notNow();
   };
 
@@ -245,40 +274,83 @@ async function askPending(): Promise<PendingSummary | null> {
   }
 }
 
+/** The captured field is still on screen with a value: the login most likely failed (or the page has not moved yet). */
+const stillHolds = (field: HTMLInputElement) => field.isConnected && isVisible(field) && field.value !== '';
+
+export interface SaveBarControl {
+  /** Cancels the pending asks and closes the bar. */
+  stop: () => void;
+  /**
+   * After a capture in this page: ask again 1.5 s and 4 s later (earlier asks are cancelled), and offer it — in the bar
+   * already up when it is idle. An ask is skipped while `field` still holds the password on screen.
+   */
+  recheck: (field?: HTMLInputElement) => void;
+}
+
+const topFrame = (doc: Document) => doc.defaultView?.top === doc.defaultView;
+
 /**
- * Top frame only: asks for this tab's capture on load and once more 1.5 s later, and shows the bar for it. Neither ask
- * extends the vault session (service worker rule). Returns the stopper (cancels the second ask, closes the bar).
+ * Top frame only: asks for this tab's capture on load and once more 1.5 s later, and shows the bar for it; `recheck`
+ * asks again after a capture (logins that never reload the page). No ask extends the vault session (service worker
+ * rule).
  */
-export function startSaveBar(doc: Document, isTopFrame: () => boolean = () => doc.defaultView?.top === doc.defaultView): () => void {
-  if (!isTopFrame()) return () => undefined;
+export function startSaveBar(doc: Document, isTopFrame: () => boolean = () => topFrame(doc)): SaveBarControl {
+  if (!isTopFrame()) return { stop: () => undefined, recheck: () => undefined };
   let stopped = false;
   let offered = false;
+  /** Bumped by recheck: an ask still in flight from before answers for an older state and is dropped. */
+  let generation = 0;
+  let watched: HTMLInputElement | null = null;
+  let timers: Array<ReturnType<typeof setTimeout>> = [];
+
   const check = async () => {
-    if (stopped || offered) return;
+    if (stopped || offered || (watched && stillHolds(watched))) return;
+    const asked = generation;
     const summary = await askPending();
-    if (!summary || stopped || offered) return;
+    if (!summary || stopped || offered || asked !== generation) return;
+    const bar = current;
+    if (bar && !bar.closed) {
+      if (!bar.idle) return; // saving or showing "Salvo!": a later ask may still offer it
+      bar.update(summary);
+    } else {
+      showSaveBar(doc, summary);
+    }
     offered = true;
-    showSaveBar(doc, summary);
   };
+  const schedule = (delays: readonly number[]) => {
+    for (const t of timers) clearTimeout(t);
+    timers = delays.map((ms) => setTimeout(() => void check(), ms));
+  };
+
   void check();
-  const timer = setTimeout(() => void check(), PENDING_RECHECK_MS);
-  return () => {
-    stopped = true;
-    clearTimeout(timer);
-    hideSaveBar();
+  schedule([PENDING_RECHECK_MS]);
+  return {
+    stop: () => {
+      stopped = true;
+      schedule([]);
+      hideSaveBar();
+    },
+    recheck: (field) => {
+      if (stopped) return;
+      generation += 1;
+      offered = false;
+      watched = field ?? null;
+      schedule(CAPTURE_RECHECK_MS);
+    },
   };
 }
 
 /**
  * The save flow of this frame, on pages the content script works on: capture submissions (every frame) and offer to
- * save them (top frame). Returns the stopper.
+ * save them (top frame, which also asks again after its own captures). Returns the stopper.
  */
-export function startSaveFlow(doc: Document = document): () => void {
+export function startSaveFlow(doc: Document = document, isTopFrame: () => boolean = () => topFrame(doc)): () => void {
   if (!shouldRun(doc)) return () => undefined;
-  const stopCapture = installCapture(doc);
-  const stopBar = startSaveBar(doc);
+  const top = isTopFrame();
+  const bar = startSaveBar(doc, () => top);
+  const stopCapture = installCapture(doc, top ? bar.recheck : undefined);
   return () => {
     stopCapture();
-    stopBar();
+    bar.stop();
   };
 }

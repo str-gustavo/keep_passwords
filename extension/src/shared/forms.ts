@@ -72,9 +72,17 @@ export function isVisible(el: HTMLElement): boolean {
   return true;
 }
 
-/** Visible inputs of `root` whose `type` passes `wanted`, in DOM order (type first: it is cheaper). */
-function visibleInputs(root: Document | ShadowRoot, wanted: (type: string) => boolean): HTMLInputElement[] {
-  return Array.from(root.querySelectorAll('input')).filter((el) => wanted(el.type) && isVisible(el));
+/** Visible inputs of `root` that pass `wanted`, in DOM order (`wanted` first: it is cheaper). */
+function visibleInputs(root: Document | ShadowRoot, wanted: (el: HTMLInputElement) => boolean): HTMLInputElement[] {
+  return Array.from(root.querySelectorAll('input')).filter((el) => wanted(el) && isVisible(el));
+}
+
+export interface DetectOptions {
+  /**
+   * Inputs to treat as password fields while they are `type=text`: fields a show-password toggle flipped (the capture
+   * remembers which inputs it saw as password fields). They are then never a username or OTP candidate.
+   */
+  wasPassword?: (el: HTMLInputElement) => boolean;
 }
 
 /** 3 autocomplete username/email, 2 type=email, 1 name/id/placeholder/aria-label hint, 0 otherwise. */
@@ -92,13 +100,15 @@ function usernameScore(el: HTMLInputElement): number {
  * fields, anywhere in the root except inside another form — the best-scoring one; ties go to the
  * input nearest the password field.
  */
-function findUsernameField(root: Document | ShadowRoot, form: HTMLFormElement | null, firstPassword: HTMLInputElement): HTMLInputElement | null {
+function findUsernameField(
+  root: Document | ShadowRoot, form: HTMLFormElement | null, firstPassword: HTMLInputElement, isPassword: (el: HTMLInputElement) => boolean,
+): HTMLInputElement | null {
   const scope = form ? Array.from(form.elements).filter(isInput) : Array.from(root.querySelectorAll('input')).filter((el) => !el.form);
   let best: HTMLInputElement | null = null;
   let bestScore = -1;
   for (const el of scope) {
     if (el === firstPassword) break;
-    if (!USERNAME_TYPES.has(el.type) || !isVisible(el)) continue;
+    if (!USERNAME_TYPES.has(el.type) || isPassword(el) || !isVisible(el)) continue;
     const score = usernameScore(el);
     if (score >= bestScore) { best = el; bestScore = score; }
   }
@@ -121,20 +131,22 @@ function classify(passwordFields: HTMLInputElement[]): FormKind {
  * One detection per form holding visible password fields, plus one for the root's form-less
  * password fields, ordered by their first password field.
  */
-export function detectForms(root: Document | ShadowRoot): DetectedForm[] {
+export function detectForms(root: Document | ShadowRoot, opts: DetectOptions = {}): DetectedForm[] {
+  const { wasPassword } = opts;
+  const isPassword = (el: HTMLInputElement) => el.type === 'password' || (el.type === 'text' && wasPassword?.(el) === true);
   const groups = new Map<HTMLFormElement | null, HTMLInputElement[]>();
-  for (const el of visibleInputs(root, (type) => type === 'password')) {
+  for (const el of visibleInputs(root, isPassword)) {
     const group = groups.get(el.form) ?? [];
     if (group.length === 0) groups.set(el.form, group);
     group.push(el);
   }
   if (groups.size === 0) return [];
-  const otpField = findOtpField(root);
+  const otpField = otpFieldOf(root, isPassword);
   return Array.from(groups, ([form, passwordFields]) => ({
     kind: classify(passwordFields),
     form,
     passwordFields,
-    usernameField: findUsernameField(root, form, passwordFields[0]!),
+    usernameField: findUsernameField(root, form, passwordFields[0]!, isPassword),
     otpField,
   }));
 }
@@ -180,7 +192,11 @@ function hasOtpHint(el: Element): boolean {
  * cep/cupom/desconto word. Never a password field.
  */
 export function findOtpField(root: Document | ShadowRoot): HTMLInputElement | null {
-  const candidates = visibleInputs(root, (type) => OTP_TYPES.has(type));
+  return otpFieldOf(root, () => false);
+}
+
+function otpFieldOf(root: Document | ShadowRoot, isPassword: (el: HTMLInputElement) => boolean): HTMLInputElement | null {
+  const candidates = visibleInputs(root, (el) => OTP_TYPES.has(el.type) && !isPassword(el));
   return candidates.find((el) => autocompleteTokens(el).includes('one-time-code'))
     ?? candidates.find(hasOtpHint)
     ?? null;
