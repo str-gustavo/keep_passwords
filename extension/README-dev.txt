@@ -11,6 +11,7 @@ Build
                             sw.js          (service worker, ES module)
                             content.js     (content script, single IIFE)
                             popup.html + assets/  (React popup)
+                            offscreen.html + assets/offscreen.js  (clears the clipboard 30 s after a copy)
                             icons/
 
   Dev/E2E only: NEXUS_DEV_HOST=http://localhost:3100 npm run ext:build
@@ -39,7 +40,7 @@ Stable extension id
 Package for the Chrome Web Store
 --------------------------------
   npm run ext:build && npm run ext:zip
-  -> extension/release/nexus-passwords-extension-<version>.zip
+  -> extension/release/br.com.nexuslogtec.passwords-<version>.zip (name from extension/package.json)
   The zipped manifest has no "key" (the store assigns its own id) and no
   "host_permissions". The version comes from manifest.json, which a test keeps
   equal to the root and workspace package.json versions.
@@ -55,3 +56,17 @@ Imports
   @app/*  -> ../lib/*  (code shared with the web app: crypto, record types, vault decrypt, API types)
   @/*     -> extension/src/*
   @/lib/* -> ../lib/*  (the shared lib files import each other this way; never create extension/src/lib/)
+
+Chrome Web Store account
+------------------------
+  The Web Store developer account is separate from the Google Play Console:
+  register once at https://chrome.google.com/webstore/devconsole (one-time US$5 fee),
+  then "New item" -> upload the zip. Extension ids cannot be reverse-domain names;
+  br.com.nexuslogtec.passwords is the package/zip name only. Edge and Brave install
+  extensions from the Chrome Web Store.
+
+Permissions shown at install
+----------------------------
+  storage, alarms, tabs, scripting, activeTab, offscreen, clipboardWrite
+  ("Modify data you copy and paste": used only to clear the clipboard after a copy).
+  Access to the server origin is requested in the popup when the server URL is set.
