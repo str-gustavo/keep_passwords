@@ -6,5 +6,5 @@ const TONE = {
   danger: 'bg-danger-soft text-danger',
 };
 export function Badge({ tone = 'neutral', className, ...p }: React.HTMLAttributes<HTMLSpanElement> & { tone?: keyof typeof TONE }) {
-  return <span {...p} className={cn('inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium', TONE[tone], className)} />;
+  return <span {...p} className={cn('inline-flex items-center rounded-lg px-2 py-0.5 text-xs font-medium', TONE[tone], className)} />;
 }
