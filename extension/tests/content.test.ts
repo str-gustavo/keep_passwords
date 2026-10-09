@@ -249,6 +249,41 @@ describe('menu: login form', () => {
     expect(menuHost()).toBeNull();
   });
 
+  it('a login form that gains a confirm field before the click is not filled', async () => {
+    respond({ getState: () => state('unlocked'), matchesForUrl: () => [item()], fillRequest: () => ({ login: 'ana', password: SECRET }) });
+    start(LOGIN);
+    await openMenu();
+    const confirm = document.createElement('input');
+    confirm.type = 'password';
+    confirm.id = 'p2';
+    document.querySelector('form')!.append(confirm);
+    menuItems()[0]!.click();
+    await flush();
+    expect(sent('fillRequest')).toHaveLength(0);
+    expect(byId('p').value).toBe('');
+    expect(menuRoot().querySelector('[role="alert"]')?.textContent).toBe('O formulário mudou. Clique no ícone novamente.');
+  });
+
+  it('a form that changes kind while fillRequest is in flight is not filled', async () => {
+    respond({
+      getState: () => state('unlocked'), matchesForUrl: () => [item()],
+      fillRequest: () => {
+        document.querySelector('form')!.insertAdjacentHTML('beforeend', '<input type="password" id="p2">');
+        return { login: 'ana', password: SECRET };
+      },
+    });
+    start(LOGIN);
+    await openMenu();
+    menuItems()[0]!.click();
+    await flush();
+    expect(sent('fillRequest')).toHaveLength(1);
+    expect(byId('u').value).toBe('');
+    expect(byId('p').value).toBe('');
+    expect(byId('p2').value).toBe('');
+    expect(menuRoot().querySelector('[role="alert"]')?.textContent).toBe('O formulário mudou. Clique no ícone novamente.');
+    expect(overlayMarkup()).not.toContain(SECRET);
+  });
+
   it('a fill error stays in the menu', async () => {
     respond({ getState: () => state('unlocked'), matchesForUrl: () => [item()], fillRequest: () => { throw new Error('Registro não corresponde a este site'); } });
     start(LOGIN);
@@ -371,6 +406,53 @@ describe('menu: closing and keyboard', () => {
     await flush();
     expect(sent('fillRequest')).toEqual([{ type: 'fillRequest', id: 'r2' }]);
     expect(byId('u').value).toBe('r2');
+  });
+
+  it('the icon announces a dialog and mirrors whether it is open (aria-expanded)', async () => {
+    two();
+    start(LOGIN);
+    expect(iconButton().getAttribute('aria-haspopup')).toBe('dialog');
+    expect(iconButton().getAttribute('aria-expanded')).toBe('false');
+    await openMenu();
+    expect(iconButton().getAttribute('aria-expanded')).toBe('true');
+    key(menuItems()[0]!, 'Escape');
+    expect(iconButton().getAttribute('aria-expanded')).toBe('false');
+  });
+
+  it('roving tabindex: only the focused row is in the tab order', async () => {
+    two();
+    start(LOGIN);
+    await openMenu();
+    const rows = menuItems();
+    expect(rows.map((r) => r.tabIndex)).toEqual([0, -1]);
+    key(rows[0]!, 'ArrowDown');
+    expect(rows.map((r) => r.tabIndex)).toEqual([-1, 0]);
+  });
+
+  it('never pulls focus away from the field; ArrowDown in the field moves into the menu', async () => {
+    let release!: (v: MatchItem[]) => void;
+    respond({ getState: () => state('unlocked'), matchesForUrl: () => new Promise<MatchItem[]>((r) => { release = r; }) });
+    start(LOGIN);
+    byId('p').focus();
+    await openMenu(); // a synthetic click does not move focus: it stays in the field
+    release([item(), item({ id: 'r2', title: 'Outro', login: 'bob' })]);
+    await flush();
+    expect(menuItems()).toHaveLength(2);
+    expect(document.activeElement).toBe(byId('p'));
+    key(byId('p'), 'ArrowDown');
+    expect(menuRoot().activeElement).toBe(menuItems()[0]);
+  });
+
+  it('closes when focus leaves the menu for the page, not when it moves inside it', async () => {
+    two();
+    start(LOGIN);
+    await openMenu();
+    key(menuItems()[0]!, 'ArrowDown');
+    await new Promise((r) => setTimeout(r, 10));
+    expect(menuHost()).not.toBeNull();
+    byId('u').focus();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(menuHost()).toBeNull();
   });
 
   it('ignores synthetic (untrusted) clicks outside tests', async () => {

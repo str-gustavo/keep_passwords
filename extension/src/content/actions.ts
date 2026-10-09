@@ -13,10 +13,17 @@ export const DEFAULT_GEN_OPTIONS: GenOptions = { length: 20, upper: true, lower:
 
 const fillable = (el: HTMLInputElement) => !el.disabled && !el.readOnly;
 
+/**
+ * Resolves the form to fill and throws (pt-BR) when it is gone or changed kind. Called before a request (nothing is
+ * asked for a form that vanished) and again after its await (the page may have changed meanwhile).
+ */
+export type FormResolver = () => DetectedForm;
+
 /** A record picked in the menu on a login / password-change form: fetch its credentials (SW-validated) and fill. */
-export async function fillRecord(form: DetectedForm, item: MatchItem): Promise<void> {
+export async function fillRecord(resolveForm: FormResolver, item: MatchItem): Promise<void> {
+  resolveForm();
   const { login, password } = await send<Credentials>({ type: 'fillRequest', id: item.id });
-  fillCredentials(form, login, password);
+  fillCredentials(resolveForm(), login, password);
 }
 
 /** A record picked on a sign-up form: only its username (already in the match list), the generator owns passwords. */
@@ -26,11 +33,12 @@ export function fillUsername(form: DetectedForm, login: string): void {
 }
 
 /** Generates a password and writes it into the form's new-password fields only; returns it for the toast. */
-export async function generateInto(form: DetectedForm): Promise<string> {
+export async function generateInto(resolveForm: FormResolver): Promise<string> {
+  resolveForm();
   const res = await send<{ password: string }>({ type: 'generatePassword', opts: DEFAULT_GEN_OPTIONS });
   const password: unknown = res?.password;
   if (typeof password !== 'string' || !password) throw new Error(T.generic);
-  for (const field of newPasswordFields(form)) if (fillable(field)) setNativeValue(field, password);
+  for (const field of newPasswordFields(resolveForm())) if (fillable(field)) setNativeValue(field, password);
   return password;
 }
 
@@ -44,14 +52,18 @@ export async function offerTotp(doc: Document, id: string, quiet: boolean): Prom
   }
 }
 
+/** The page's first login form, else its first password-change form. */
+function loginFormOf(doc: Document): DetectedForm | null {
+  const forms = detectForms(doc);
+  return forms.find((f) => f.kind === 'login') ?? forms.find((f) => f.kind === 'change') ?? null;
+}
+
 /**
  * `fillInto` from the popup: fills the page's first login form (else a password-change form, whose current-password
  * field fillCredentials targets). Nothing is requested when there is no such form.
  */
 export async function fillFromPopup(doc: Document, id: string): Promise<void> {
-  const forms = detectForms(doc);
-  const form = forms.find((f) => f.kind === 'login') ?? forms.find((f) => f.kind === 'change');
-  if (!form) {
+  if (!loginFormOf(doc)) {
     showNotice(doc, T.noLoginForm);
     return;
   }
@@ -60,6 +72,11 @@ export async function fillFromPopup(doc: Document, id: string): Promise<void> {
     creds = await send<Credentials & { hasTotp?: unknown }>({ type: 'fillRequest', id });
   } catch (e) {
     showNotice(doc, errorText(e));
+    return;
+  }
+  const form = loginFormOf(doc); // re-detected: the page may have changed during the request
+  if (!form) {
+    showNotice(doc, T.noLoginForm);
     return;
   }
   fillCredentials(form, creds.login, creds.password);

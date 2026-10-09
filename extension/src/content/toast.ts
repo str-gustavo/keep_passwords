@@ -2,7 +2,7 @@ import { findOtpField } from '@/shared/forms';
 import type { TotpCode } from '@/shared/messages';
 import { fillOtp } from '@/shared/otp';
 import { nexusMark } from './brand';
-import { createOverlay, h, isUserEvent } from './host';
+import { createOverlay, h, isUserEvent, overlayVisible, removeOverlay } from './host';
 import { T } from './strings';
 import { TOAST_CSS } from './styles';
 
@@ -45,7 +45,8 @@ function mountCard(doc: Document, title: string, lifetimeMs: number): Card {
   const close = () => { if (current?.host === host) hideToast(); };
   const button = (label: string, variant: 'primary' | 'secondary', run: () => void) => {
     const el = h(doc, 'button', { class: `btn ${variant}`, text: label, attrs: { type: 'button' } });
-    el.addEventListener('click', (e) => { if (isUserEvent(e)) run(); });
+    // Copy / fill act only while the card is really visible (same clickjacking rule as the icon and menu).
+    el.addEventListener('click', (e) => { if (isUserEvent(e) && overlayVisible(host)) run(); });
     return el;
   };
   const closeButton = h(doc, 'button', { class: 'close', text: '×', attrs: { type: 'button', 'aria-label': T.close, title: T.close } });
@@ -57,7 +58,7 @@ function mountCard(doc: Document, title: string, lifetimeMs: number): Card {
   root.append(card);
   const timer = setTimeout(close, lifetimeMs);
   disposers.push(() => clearTimeout(timer));
-  current = { host, dispose: () => { for (const d of disposers) d(); host.remove(); } };
+  current = { host, dispose: () => { for (const d of disposers) d(); removeOverlay(host); } };
   return { card, status, close, onDispose: (fn) => disposers.push(fn), button };
 }
 

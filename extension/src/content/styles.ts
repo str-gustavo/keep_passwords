@@ -34,6 +34,10 @@ const HOST = `
   visibility: visible !important; pointer-events: auto !important; z-index: 2147483647 !important;
   min-width: 0 !important; max-width: none !important; min-height: 0 !important; max-height: none !important;
   contain: layout style !important;
+  /* Ways a page could make the host invisible yet still clickable (clickjacking). */
+  mask: none !important; -webkit-mask: none !important; mix-blend-mode: normal !important; zoom: 1 !important;
+  translate: none !important; scale: none !important; rotate: none !important; clip: auto !important;
+  content-visibility: visible !important;
 }
 :host([hidden]) { display: none !important; }
 *, *::before, *::after { box-sizing: border-box; }

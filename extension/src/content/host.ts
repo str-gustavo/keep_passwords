@@ -44,6 +44,33 @@ function adoptCss(doc: Document, root: ShadowRoot, css: string): void {
  */
 const CONTAINED_EVENTS = ['pointerdown', 'pointerup', 'mousedown', 'mouseup', 'click', 'dblclick', 'keydown', 'keyup', 'keypress'] as const;
 
+/** IntersectionObserver v2 verdict (`isVisible`) per host, where the engine supports `trackVisibility`. */
+const engineVisibility = new WeakMap<Node, boolean>();
+const visibilityObservers = new WeakMap<Document, IntersectionObserver>();
+
+/**
+ * One `trackVisibility` observer per document (Chrome's IntersectionObserver v2): it reports a host as not visible when
+ * something paints over it or an ancestor fades, filters or transforms it — cases our own style checks cannot see.
+ */
+function visibilityObserver(doc: Document): IntersectionObserver | null {
+  const existing = visibilityObservers.get(doc);
+  if (existing) return existing;
+  const IO = doc.defaultView?.IntersectionObserver ?? globalThis.IntersectionObserver;
+  if (typeof IO !== 'function') return null;
+  try {
+    const observer = new IO((entries) => {
+      for (const entry of entries) {
+        const visible = (entry as IntersectionObserverEntry & { isVisible?: unknown }).isVisible;
+        if (typeof visible === 'boolean') engineVisibility.set(entry.target, visible);
+      }
+    }, { trackVisibility: true, delay: 100 } as IntersectionObserverInit);
+    visibilityObservers.set(doc, observer);
+    return observer;
+  } catch {
+    return null;
+  }
+}
+
 export function createOverlay(doc: Document, tag: OverlayTag, css: string): Overlay {
   const host = doc.createElement(tag);
   const root = host.attachShadow({ mode: 'closed' });
@@ -51,7 +78,15 @@ export function createOverlay(doc: Document, tag: OverlayTag, css: string): Over
   for (const type of CONTAINED_EVENTS) root.addEventListener(type, (e) => e.stopPropagation());
   roots.set(host, root);
   doc.documentElement.append(host);
+  visibilityObserver(doc)?.observe(host);
   return { host, root };
+}
+
+/** Removes a host for good (stops its visibility tracking too). */
+export function removeOverlay(host: HTMLElement): void {
+  visibilityObservers.get(host.ownerDocument)?.unobserve(host);
+  engineVisibility.delete(host);
+  host.remove();
 }
 
 /** Puts a removed host back (a site may wipe unknown children of <html>). */
@@ -88,19 +123,31 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 /** Below this effective opacity an overlay counts as hidden by the page. */
 const MIN_OPACITY = 0.5;
 
+const MASK_PROPERTIES = ['mask-image', '-webkit-mask-image'] as const;
+const hasMask = (s: CSSStyleDeclaration) => MASK_PROPERTIES.some((p) => { const v = s.getPropertyValue(p).trim(); return v !== '' && v !== 'none'; });
+
 /**
- * Whether the user can actually see `host`. `:host` pins the host's own opacity/visibility, but a page can still fade
- * <html> (its only ancestor) to make the icon or menu invisible and steer a click onto it (clickjacking). Clicks on an
- * overlay that is not visible are ignored. A `filter` on <html> is tolerated: sites use it for themes.
+ * Whether the user can actually see `host`; clicks on an overlay that is not visible are ignored (clickjacking: a page
+ * hiding our icon or menu under a decoy and steering the click onto it). `:host` pins the host's own look with
+ * !important (opacity, mask, filter, transforms…), but the page can still act on <html>, its only ancestor. Hidden
+ * means any of:
+ * - IntersectionObserver v2 (Chrome) last reported `isVisible === false` (occluded, faded, filtered, transformed);
+ * - `checkVisibility` with opacity/visibility says hidden;
+ * - on the host or an ancestor: effective opacity below 0.5, a `filter` with `opacity(…)`, or a mask image (masks and
+ *   filters do not affect hit-testing, so a masked overlay still takes clicks).
+ * Other filters on <html> are tolerated by the style checks: sites use them for themes.
  */
 export function overlayVisible(host: HTMLElement): boolean {
+  if (engineVisibility.get(host) === false) return false;
   if (typeof host.checkVisibility === 'function' && !host.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
   const win = host.ownerDocument.defaultView;
   if (!win) return false;
   let opacity = 1;
   for (let el: Element | null = host; el; el = el.parentElement) {
-    const value = Number.parseFloat(win.getComputedStyle(el).opacity);
+    const s = win.getComputedStyle(el);
+    const value = Number.parseFloat(s.getPropertyValue('opacity'));
     if (!Number.isNaN(value)) opacity *= value;
+    if (s.getPropertyValue('filter').includes('opacity(') || hasMask(s)) return false;
   }
   return opacity >= MIN_OPACITY;
 }

@@ -1,6 +1,6 @@
 import { isVisible } from '@/shared/forms';
 import { lockIcon } from './brand';
-import { createOverlay, ensureAttached, h, isUserEvent, overlayVisible, setHostStyles } from './host';
+import { createOverlay, ensureAttached, h, isUserEvent, overlayVisible, removeOverlay, setHostStyles } from './host';
 import { T } from './strings';
 import { ICON_CSS } from './styles';
 
@@ -13,6 +13,7 @@ const MIN_FIELD_WIDTH = 48;
 /** The Nexus lock over the right edge of one password field. */
 export class FieldIcon {
   readonly host: HTMLElement;
+  private readonly button: HTMLButtonElement;
 
   constructor(readonly field: HTMLInputElement, onActivate: (field: HTMLInputElement) => void) {
     const doc = field.ownerDocument;
@@ -21,8 +22,9 @@ export class FieldIcon {
     // tabindex -1: the host sits at the end of <html>, so a tab stop there would be far from its field.
     const button = h(doc, 'button', {
       class: 'icon',
-      attrs: { type: 'button', tabindex: '-1', title: T.appName, 'aria-label': T.iconLabel, 'aria-haspopup': 'menu' },
+      attrs: { type: 'button', tabindex: '-1', title: T.appName, 'aria-label': T.iconLabel, 'aria-haspopup': 'dialog', 'aria-expanded': 'false' },
     }, [lockIcon(doc, ICON_SIZE)]);
+    this.button = button;
     button.addEventListener('click', (e) => {
       e.preventDefault();
       if (isUserEvent(e) && overlayVisible(host)) onActivate(field);
@@ -52,7 +54,12 @@ export class FieldIcon {
     });
   }
 
+  /** Mirrors whether this field's menu is open (aria-expanded). */
+  setExpanded(open: boolean): void {
+    this.button.setAttribute('aria-expanded', String(open));
+  }
+
   destroy(): void {
-    this.host.remove();
+    removeOverlay(this.host);
   }
 }

@@ -163,22 +163,27 @@ export class ContentScript {
     return detectForms(this.doc).find((f) => f.passwordFields.includes(field)) ?? null;
   }
 
-  private requireForm(field: HTMLInputElement): DetectedForm {
+  /** The field's form, still of the kind the menu was built for (a login form that grew a confirm field is not). */
+  private requireForm(field: HTMLInputElement, kind: FormKind): DetectedForm {
     const form = this.formFor(field);
-    if (!form) throw new Error(T.formGone);
+    if (!form || form.kind !== kind) throw new Error(T.formGone);
     return form;
   }
 
   private async openMenu(field: HTMLInputElement): Promise<void> {
     this.closeMenu();
     const menu = new InlineMenu(field, {
-      onClose: (m) => { if (this.menu === m) this.menu = null; },
+      onClose: (m) => {
+        this.icons.get(m.anchor)?.setExpanded(false);
+        if (this.menu === m) this.menu = null;
+      },
       isOwnTarget: (path) => {
         const icon = this.icons.get(field);
         return icon !== undefined && path.includes(icon.host);
       },
     });
     this.menu = menu;
+    this.icons.get(field)?.setExpanded(true);
     menu.loading();
     const live = () => this.menu === menu && !menu.closed;
     try {
@@ -218,6 +223,7 @@ export class ContentScript {
 
   private recordsView(menu: InlineMenu, field: HTMLInputElement, form: DetectedForm, matches: MatchItem[]): MenuView {
     const kind: FormKind = form.kind;
+    const resolve = () => this.requireForm(field, kind);
     const entries: MenuEntry[] = [];
     if (kind !== 'login') {
       entries.push({
@@ -225,7 +231,7 @@ export class ContentScript {
         detail: T.generateDetail,
         variant: 'primary',
         run: async () => {
-          const password = await generateInto(this.requireForm(field));
+          const password = await generateInto(resolve);
           menu.close(false);
           showPasswordToast(this.doc, password);
         },
@@ -240,7 +246,7 @@ export class ContentScript {
             detail: m.login,
             ariaLabel: T.useUsername(m.login),
             run: () => {
-              fillUsername(this.requireForm(field), m.login);
+              fillUsername(resolve(), m.login);
               menu.close(false);
             },
           });
@@ -254,7 +260,7 @@ export class ContentScript {
         detail: m.login || T.noLogin,
         ariaLabel: T.fillRecord(m.title, m.login),
         run: async () => {
-          await fillRecord(this.requireForm(field), m);
+          await fillRecord(resolve, m);
           menu.close(false);
           if (m.hasTotp) void offerTotp(this.doc, m.id, false);
         },
