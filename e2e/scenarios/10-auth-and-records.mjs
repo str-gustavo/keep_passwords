@@ -84,7 +84,9 @@ export default async function run(ctx) {
   b.waitTextIn(tid('detail-title'), 'GitHub 2');
   b.waitTextIn(tid(`record-row-${id}`), 'GitHub 2');
 
-  // 6. Trash and restore.
+  // 6. Trash and restore. "Mover para a lixeira" sits in the detail's "···" menu.
+  b.click(tid('detail-more'));
+  b.waitFor(tid('detail-delete'));
   b.click(tid('detail-delete'));
   b.waitFor(tid('detail-delete-confirm'));
   b.click(tid('detail-delete-confirm'));

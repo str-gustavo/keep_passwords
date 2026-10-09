@@ -1,5 +1,6 @@
 'use client';
 import { Star, Users } from 'lucide-react';
+import { Badge } from '@/components/ui/Badge';
 import { t } from '@/lib/i18n/pt-br';
 import { getRecordType } from '@/lib/record-types/catalog';
 import { cn } from '@/lib/ui/cn';
@@ -26,12 +27,12 @@ export function RecordRow({ record, selected, shared, onSelect }: { record: Vaul
         aria-current={selected ? 'true' : undefined}
         onClick={() => onSelect(record.id)}
         className={cn(
-          'flex w-full items-center gap-3 border-l-4 py-3 pl-3 pr-4 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
-          selected ? 'border-primary bg-primary-soft' : 'border-transparent hover:bg-surface-2',
+          'flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
+          selected ? 'bg-primary-soft' : 'hover:bg-surface-2',
         )}
       >
-        <span className={cn('flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-primary', selected ? 'bg-surface' : 'bg-surface-2')}>
-          <TypeIcon type={record.type} className="h-5 w-5" />
+        <span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-primary', selected ? 'bg-surface' : 'bg-primary-soft')}>
+          <TypeIcon type={record.type} className="h-4 w-4" />
         </span>
         <span className="min-w-0 flex-1">
           <span className={cn('block truncate text-sm font-medium', record.data ? 'text-fg' : 'italic text-fg-muted')}>{title}</span>
@@ -49,6 +50,8 @@ export function RecordRow({ record, selected, shared, onSelect }: { record: Vaul
             <span className="sr-only">{t.sharedRecord}</span>
           </>
         )}
+        {/* `max-sm:hidden`, not `hidden sm:inline-flex`: cn() does not merge classes and Badge already sets inline-flex. */}
+        <Badge tone="neutral" className="shrink-0 max-sm:hidden">{getRecordType(record.type).label}</Badge>
       </button>
     </li>
   );

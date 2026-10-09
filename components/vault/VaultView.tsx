@@ -13,6 +13,7 @@ import { filterRecords, type ListFilter } from '@/lib/vault/selectors';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { useSelectedRecordId } from '@/lib/vault/use-selected-record';
 import { FolderHeaderActions } from './FolderHeaderActions';
+import { IconButton } from './IconButton';
 import { MoveToFolderDialog } from './MoveToFolderDialog';
 import { RecordDetail } from './RecordDetail';
 import { RecordForm } from './RecordForm';
@@ -55,38 +56,45 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-3 lg:px-6">
+      {/* Below sm the search drops to its own full-width row; from lg the side blocks share the leftover width so the
+          search sits centred in the bar. */}
+      <header className="flex shrink-0 flex-wrap items-center gap-3 border-b border-border bg-surface px-4 py-2.5 sm:h-14 sm:flex-nowrap sm:py-0 lg:px-6">
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {folder && (folder.kind === 'shared'
-            ? <Users className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />
-            : <Folder className="h-5 w-5 shrink-0 text-primary" aria-hidden="true" />)}
-          <h1 className="truncate text-lg font-semibold text-fg">{heading}</h1>
-          {status === 'loading' && <Spinner className="h-4 w-4 text-primary" />}
+            ? <Users className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
+            : <Folder className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />)}
+          <h1 className="truncate text-base font-semibold text-fg-strong">{heading}</h1>
+          {status === 'loading' && <Spinner className="h-4 w-4 shrink-0 text-primary" />}
           {folder && <FolderHeaderActions folder={folder} />}
         </div>
-        <div className="relative order-last w-full sm:order-none sm:w-72 lg:w-80">
+        <div className="relative order-last w-full sm:order-none sm:w-64 md:w-80 lg:mx-auto lg:w-full lg:max-w-[560px]">
           <label htmlFor="vault-search" className="sr-only">{t.search}</label>
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-fg-muted" aria-hidden="true" />
-          <Input id="vault-search" data-testid="search" type="search" autoComplete="off" placeholder={t.search} value={query} onChange={(e) => setQuery(e.target.value)} className="pl-9" />
+          <Input
+            id="vault-search" data-testid="search" type="search" autoComplete="off" placeholder={t.search} value={query} onChange={(e) => setQuery(e.target.value)}
+            className="border-transparent bg-surface-2 pl-9 focus:bg-surface"
+          />
         </div>
-        <Button
-          variant="secondary" data-testid="vault-refresh" aria-label={refreshing ? t.vaultRefreshing : t.vaultRefresh} title={t.vaultRefresh}
-          aria-busy={refreshing} disabled={status === 'loading'}
-          onClick={() => { refreshVault({ force: true }).catch(() => toast.error(t.vaultRefreshFailed)); }}
-        >
-          <RotateCw className={cn('h-4 w-4', refreshing && 'animate-spin')} aria-hidden="true" />
-        </Button>
-        {canCreate && (
-          <Button data-testid="new-record" onClick={() => setEditing({ mode: 'new' })} aria-label={t.newRecord}>
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            <span className="hidden sm:inline">{t.newRecord}</span>
-          </Button>
-        )}
+        <div className="flex shrink-0 items-center gap-2 lg:flex-1 lg:justify-end">
+          <IconButton
+            data-testid="vault-refresh" label={refreshing ? t.vaultRefreshing : t.vaultRefresh} title={t.vaultRefresh}
+            aria-busy={refreshing} disabled={status === 'loading'} variant="secondary" size="md"
+            onClick={() => { refreshVault({ force: true }).catch(() => toast.error(t.vaultRefreshFailed)); }}
+          >
+            <RotateCw className={cn('h-4 w-4', refreshing && 'animate-spin')} aria-hidden="true" />
+          </IconButton>
+          {canCreate && (
+            <Button data-testid="new-record" onClick={() => setEditing({ mode: 'new' })} aria-label={t.newRecord} title={t.newRecord}>
+              <Plus className="h-4 w-4" aria-hidden="true" />
+              <span className="hidden sm:inline">{t.newRecordShort}</span>
+            </Button>
+          )}
+        </div>
       </header>
       {filter.kind === 'trash' && <TrashHeader records={inScope} />}
 
       {status === 'error' && (
-        <div role="alert" className="flex shrink-0 items-center gap-3 border-b border-border bg-surface px-4 py-2 text-sm text-danger lg:px-6">
+        <div role="alert" className="flex shrink-0 items-center gap-3 border-b border-border bg-danger-soft px-4 py-2 text-sm text-danger lg:px-6">
           <span className="min-w-0 flex-1">{loadError ?? t.vaultLoadError}</span>
           <Button variant="secondary" size="sm" onClick={() => { loadVault().catch(() => undefined); }}>
             <RotateCw className="h-4 w-4" aria-hidden="true" />{t.retry}
@@ -96,10 +104,10 @@ export function VaultView({ filter, title }: { filter: ListFilter; title: string
 
       <div className="flex min-h-0 flex-1">
         {/* Below lg the list and the detail alternate: a selected record hides the list. */}
-        <section aria-label={heading} className={cn('min-h-0 w-full flex-col border-r border-border bg-surface lg:flex lg:w-[380px] lg:shrink-0', selected ? 'hidden' : 'flex')}>
+        <section aria-label={heading} className={cn('min-h-0 w-full flex-col border-r border-border bg-surface lg:flex lg:w-[400px] lg:shrink-0', selected ? 'hidden' : 'flex')}>
           <RecordList records={list} selectedId={selected?.id ?? null} onSelect={setSelected} />
         </section>
-        <section aria-label={t.recordDetails} className={cn('min-w-0 flex-1 flex-col lg:flex', selected ? 'flex' : 'hidden')}>
+        <section aria-label={t.recordDetails} className={cn('min-w-0 flex-1 flex-col bg-surface lg:flex', selected ? 'flex' : 'hidden')}>
           {selected && (
             <div className="flex shrink-0 items-center border-b border-border bg-surface px-2 py-2 lg:hidden">
               <Button variant="ghost" size="sm" onClick={() => setSelected(null)}>

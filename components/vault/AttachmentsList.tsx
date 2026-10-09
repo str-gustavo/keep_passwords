@@ -35,9 +35,9 @@ export function AttachmentsList({ recordId, attachments, editable }: { recordId:
 
   return (
     <>
-      <ul className="divide-y divide-border rounded-lg border border-border">
+      <ul className="space-y-2">
         {attachments.map((a) => (
-          <li key={a.id} className="flex items-center gap-3 px-3 py-2">
+          <li key={a.id} className="flex items-center gap-3 rounded-lg border border-border bg-surface px-3 py-2">
             <Paperclip className="h-4 w-4 shrink-0 text-fg-muted" aria-hidden="true" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm text-fg" title={a.name}>{a.name}</p>

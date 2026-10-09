@@ -57,14 +57,14 @@ export function TotpView({ uri }: { uri: string }) {
   const ending = remaining <= 5;
   return (
     <div className="flex items-center gap-3">
-      <span data-testid="detail-totp-code" className="font-mono text-xl font-semibold tracking-wider text-fg">{groupCode(code)}</span>
+      <span data-testid="detail-totp-code" className="font-mono text-xl font-semibold tracking-wider text-fg-strong">{groupCode(code)}</span>
       <span className="relative inline-flex h-9 w-9 shrink-0 items-center justify-center" role="timer" aria-label={`${remaining} ${t.totpSecondsLeft}`}>
         <svg viewBox="0 0 36 36" className="absolute inset-0 h-full w-full -rotate-90" aria-hidden="true">
-          <circle cx="18" cy="18" r={RADIUS} fill="none" stroke="var(--color-border)" strokeWidth="3" />
+          <circle cx="18" cy="18" r={RADIUS} fill="none" strokeWidth="3" className="stroke-border" />
           <circle
-            cx="18" cy="18" r={RADIUS} fill="none" stroke="var(--color-primary)" strokeWidth="3" strokeLinecap="round"
+            cx="18" cy="18" r={RADIUS} fill="none" strokeWidth="3" strokeLinecap="round"
             strokeDasharray={`${(CIRCUMFERENCE * remaining) / params.period} ${CIRCUMFERENCE}`}
-            className="transition-[stroke-dasharray] duration-1000 ease-linear"
+            className="stroke-primary transition-[stroke-dasharray] duration-1000 ease-linear"
           />
         </svg>
         <span className={cn('relative text-[11px] font-semibold tabular-nums', ending ? 'text-danger' : 'text-fg-muted')} aria-hidden="true">{remaining}</span>

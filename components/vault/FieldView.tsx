@@ -22,13 +22,14 @@ export function FieldView({ label, value, kind, testKey }: { label: string; valu
   if (kind === 'totp') content = <TotpView key={value} uri={value} />;
   else if (href) content = <a href={href} target="_blank" rel="noopener noreferrer" className="text-primary-text underline-offset-2 hover:underline">{value}</a>;
 
+  // Rows sit in a `divide-y` card (RecordDetail), which draws the thin divider between them.
   return (
-    <div className="flex items-start gap-3 border-b border-border py-3 last:border-b-0">
+    <div className="flex items-start gap-3 py-2.5">
       <div className="min-w-0 flex-1">
-        <dt className="text-xs font-medium text-fg-muted">{label}</dt>
+        <dt className="text-xs text-fg-muted">{label}</dt>
         <dd
           data-testid={`detail-field-${testKey}`}
-          className={cn('mt-1 text-sm text-fg', masked ? 'break-all font-mono' : 'break-words', (kind === 'multiline' || (kind === 'secretMultiline' && revealed)) && 'whitespace-pre-wrap')}
+          className={cn('mt-0.5 text-sm text-fg', masked ? 'break-all font-mono' : 'break-words', (kind === 'multiline' || (kind === 'secretMultiline' && revealed)) && 'whitespace-pre-wrap')}
         >
           {content}
         </dd>

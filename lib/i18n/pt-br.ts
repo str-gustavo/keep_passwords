@@ -272,8 +272,6 @@ export const t = {
   // Record list and detail (Task 24)
   recordType: 'Tipo',
   allTypes: 'Todos os tipos',
-  recordCountOne: 'registro',
-  recordCountMany: 'registros',
   noRecords: 'Nenhum registro',
   noRecordsHint: 'Crie um registro ou ajuste a busca.',
   noSelection: 'Nenhum registro selecionado',
@@ -381,4 +379,10 @@ export const t = {
   lockVault: 'Bloquear cofre',
   themeDark: 'Tema escuro',
   themeLight: 'Tema claro',
+  // Cofre: barra superior, lista e detalhe (redesign leve).
+  newRecordShort: 'Novo',
+  recordCount: (n: number) => (n === 1 ? '1 registro' : `${n} registros`),
+  sortedByTitle: 'Nome (A–Z)',
+  openSite: 'Abrir site',
+  moreActions: 'Mais ações',
 } as const;

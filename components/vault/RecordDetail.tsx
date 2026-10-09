@@ -4,17 +4,16 @@ import { Badge } from '@/components/ui/Badge';
 import { t } from '@/lib/i18n/pt-br';
 import { getRecordType } from '@/lib/record-types/catalog';
 import { cn } from '@/lib/ui/cn';
-import { formatTimestamp } from '@/lib/ui/format';
+import { formatTimestamp, urlHost } from '@/lib/ui/format';
 import { useVault, type VaultRecord } from '@/lib/vault/store';
 import { AttachmentsList } from './AttachmentsList';
-import { DetailActions, type DetailActionHandlers } from './DetailActions';
+import { DetailActions, FavoriteToggle, type DetailActionHandlers } from './DetailActions';
 import { FieldView } from './FieldView';
 import { TypeIcon } from './TypeIcon';
 
 const hasValue = (v: string | undefined): v is string => v !== undefined && v.trim() !== '';
-const outlineBadge = 'inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-xs font-medium text-fg-muted';
-const card = 'rounded-xl border border-border bg-surface px-4';
-const sectionTitle = 'mb-2 text-xs font-semibold uppercase tracking-wide text-fg-muted';
+const card = 'divide-y divide-border rounded-xl border border-border bg-surface px-4';
+const sectionTitle = 'mb-2 text-sm font-semibold text-fg-strong';
 
 /** Render with `key={record.id}` so revealed secrets are re-masked when the selection changes. */
 export function RecordDetail({ record, ...handlers }: { record: VaultRecord } & DetailActionHandlers) {
@@ -25,26 +24,28 @@ export function RecordDetail({ record, ...handlers }: { record: VaultRecord } & 
   const fields = data ? typeDef.fields.filter((f) => hasValue(data.fields[f.key])) : [];
   const custom = data ? data.custom.map((c, i) => ({ ...c, i })).filter((c) => hasValue(c.value)) : [];
   const passwordDates = data ? typeDef.fields.filter((f) => f.kind === 'password' && data.passwordChangedAt[f.key]) : [];
+  const updated = formatTimestamp(record.updatedAt);
+  const subtitle = [data?.fields.url ? urlHost(data.fields.url) : null, updated && `${t.updatedAt} ${updated}`].filter(Boolean).join(' · ');
 
   return (
-    <article className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6 lg:px-8">
+    <article className="mx-auto w-full max-w-3xl space-y-6 px-6 py-6 lg:px-8">
       <header className="space-y-4">
-        <div className="flex items-start gap-4">
-          <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-xl bg-primary-soft text-primary">
-            <TypeIcon type={typeDef.id} className="h-7 w-7" />
-          </span>
+        <div className="flex items-start gap-3">
+          <TypeIcon type={typeDef.id} className="mt-1 h-5 w-5 shrink-0 text-primary" />
           <div className="min-w-0 flex-1">
-            <h2 data-testid="detail-title" className={cn('break-words text-xl font-semibold', data ? 'text-fg' : 'italic text-fg-muted')}>
+            <h2 data-testid="detail-title" className={cn('break-words text-xl font-semibold', data ? 'text-fg-strong' : 'italic text-fg-muted')}>
               {data ? data.title.trim() || t.untitled : t.recordUnavailable}
             </h2>
+            {subtitle && <p className="mt-0.5 text-sm text-fg-muted">{subtitle}</p>}
             <div className="mt-2 flex flex-wrap items-center gap-1.5">
-              <Badge tone="primary">{typeDef.label}</Badge>
+              <Badge tone="neutral">{typeDef.label}</Badge>
               {record.ownerId !== userId && (
-                <span className={outlineBadge} title={record.ownerEmail}><Users className="h-3 w-3" aria-hidden="true" />{t.sharedBy} {record.ownerEmail}</span>
+                <Badge tone="neutral" className="gap-1" title={record.ownerEmail}><Users className="h-3 w-3" aria-hidden="true" />{t.sharedBy} {record.ownerEmail}</Badge>
               )}
-              {record.access.permission === 'view' && <span className={outlineBadge}><Eye className="h-3 w-3" aria-hidden="true" />{t.readOnly}</span>}
+              {record.access.permission === 'view' && <Badge tone="neutral" className="gap-1"><Eye className="h-3 w-3" aria-hidden="true" />{t.readOnly}</Badge>}
             </div>
           </div>
+          <FavoriteToggle record={record} />
         </div>
         <DetailActions record={record} {...handlers} />
       </header>
@@ -84,7 +85,6 @@ export function RecordDetail({ record, ...handlers }: { record: VaultRecord } & 
       <footer>
         <dl className="space-y-1 text-xs text-fg-muted">
           <div className="flex gap-1"><dt>{t.createdAt}</dt><dd>{formatTimestamp(record.createdAt)}</dd></div>
-          <div className="flex gap-1"><dt>{t.updatedAt}</dt><dd>{formatTimestamp(record.updatedAt)}</dd></div>
           {data && passwordDates.map((f) => (
             <div key={f.key} className="flex gap-1"><dt>{f.label} {t.changedAt}</dt><dd>{formatTimestamp(data.passwordChangedAt[f.key] ?? '')}</dd></div>
           ))}
