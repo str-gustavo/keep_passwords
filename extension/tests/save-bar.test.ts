@@ -524,14 +524,14 @@ describe('save bar: look', () => {
   };
   const contrast = (a: string, b: string) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number]; return (hi + 0.05) / (lo + 0.05); };
 
-  it('is fixed to the top, navy with white text, orange buttons with dark text, green when saved; all AA', () => {
+  it('is fixed to the top, light with navy text, orange buttons with dark text, green when saved; all AA', () => {
     for (const decl of ['position: fixed !important', 'top: 0 !important', 'left: 0 !important', 'right: 0 !important']) expect(BAR_CSS).toContain(decl);
-    expect(BAR_CSS).toContain(`background: ${PALETTE.navy}; color: ${PALETTE.white};`);
+    expect(BAR_CSS).toContain(`background: ${PALETTE.surface}; color: ${PALETTE.fgStrong};`);
     expect(BAR_CSS).toContain(`.btn.primary { background: ${PALETTE.orange}; color: ${PALETTE.onOrange}; }`);
-    expect(BAR_CSS).toContain(`.bar.saved { background: ${PALETTE.success};`);
+    expect(BAR_CSS).toContain(`.bar.saved { background: ${PALETTE.successSoft};`);
     expect(BAR_CSS).toMatch(/\.question \{[^}]*overflow-wrap: anywhere;/);
     expect(PALETTE.onOrange).toBe('#071E3A');
-    for (const [fg, bg] of [[PALETTE.white, PALETTE.navy], [PALETTE.white, PALETTE.success], [PALETTE.fg, PALETTE.navyLight], [PALETTE.onOrange, PALETTE.orange]] as const) {
+    for (const [fg, bg] of [[PALETTE.fgStrong, PALETTE.surface], [PALETTE.success, PALETTE.successSoft], [PALETTE.fg, PALETTE.surface2], [PALETTE.onOrange, PALETTE.orange]] as const) {
       expect(contrast(fg, bg), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
     }
   });

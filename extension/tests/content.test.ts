@@ -516,11 +516,14 @@ describe('brand palette', () => {
   };
   const contrast = (a: string, b: string) => { const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x) as [number, number]; return (hi + 0.05) / (lo + 0.05); };
 
-  it('uses the shipped tokens and keeps every text pair at AA (4.5:1)', () => {
-    expect(PALETTE).toMatchObject({ navy: '#0D2A4D', orange: '#FA681F', orangeOnNavy: '#FFB38A', onOrange: '#071E3A' });
+  it('a paleta clara do content script é AA em todos os pares usados', () => {
+    expect(PALETTE).toMatchObject({ surface: '#FFFFFF', soft: '#FFF1E8', fg: '#1E293B', fgStrong: '#0D2A4D', muted: '#61708A', border: '#E6EAF0', orange: '#FA681F', onOrange: '#071E3A', orangeText: '#B0440E' });
     const pairs: Array<[string, string]> = [
-      [PALETTE.fg, PALETTE.navy], [PALETTE.muted, PALETTE.navy], [PALETTE.orangeOnNavy, PALETTE.navy], [PALETTE.danger, PALETTE.navy],
-      [PALETTE.fg, PALETTE.navyLight], [PALETTE.muted, PALETTE.navyLight], [PALETTE.onOrange, PALETTE.orange], [PALETTE.onOrange, PALETTE.orangeHover],
+      [PALETTE.fg, PALETTE.surface], [PALETTE.fgStrong, PALETTE.surface], [PALETTE.muted, PALETTE.surface], [PALETTE.muted, PALETTE.surface2],
+      [PALETTE.fg, PALETTE.soft], [PALETTE.muted, PALETTE.soft], [PALETTE.fg, PALETTE.surface2], [PALETTE.fgStrong, PALETTE.successSoft],
+      [PALETTE.orangeText, PALETTE.surface], [PALETTE.orangeText, PALETTE.soft], [PALETTE.orangeText, '#FFE4D3'],
+      [PALETTE.onOrange, PALETTE.orange], [PALETTE.onOrange, PALETTE.orangeHover],
+      [PALETTE.danger, PALETTE.surface], [PALETTE.success, PALETTE.surface], [PALETTE.success, PALETTE.successSoft],
     ];
     for (const [fg, bg] of pairs) expect(contrast(fg, bg), `${fg} on ${bg}`).toBeGreaterThanOrEqual(4.5);
   });
