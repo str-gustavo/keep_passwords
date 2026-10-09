@@ -2,11 +2,11 @@
 // the web app's own libraries (@app/crypto, @app/vault/decrypt); the plaintext lives only in storage.session.
 import type { LoginResponse, PreloginResponse, SessionUser, VaultResponse } from '@app/api/types';
 import { computeAuthKey, unlockDataKey } from '@app/crypto/account';
-import { decryptBytes, encryptJson, exportAesKey, generateAesKey, importAesKey, wrapAesKey } from '@app/crypto/aes';
+import { decryptBytes, decryptJson, encryptJson, exportAesKey, generateAesKey, importAesKey, wrapAesKey } from '@app/crypto/aes';
 import { fromBase64, toBase64 } from '@app/crypto/encoding';
 import { assertKdfIterations } from '@app/crypto/kdf';
 import { importPrivateKey } from '@app/crypto/rsa';
-import { emptyRecordData, touchPasswordDates, type RecordData } from '@app/record-types/record-data';
+import { emptyRecordData, recordDataSchema, touchPasswordDates, type RecordData } from '@app/record-types/record-data';
 import { decryptVault } from '@app/vault/decrypt';
 import { EMAIL_KEY, REFRESH_MIN_MS, SEARCH_LIMIT } from '@/shared/constants';
 import { hostOf, originOf, urlsMatch } from '@/shared/domain';
@@ -49,12 +49,13 @@ export function findRecord(vault: VaultRecordLite[], id: string): VaultRecordLit
   return r;
 }
 
+/** The fillable fields only: the rest of the RecordData (notes, custom fields, attachments…) is not kept. */
 async function toLite(r: DecryptedRecord): Promise<VaultRecordLite | null> {
   if (!r.data || !r.key || r.deletedAt !== null || !FILLABLE_TYPES.has(r.type)) return null;
   const f = r.data.fields;
   return {
     id: r.id, type: r.type, title: r.data.title, login: f.login ?? '', password: f.password ?? '', url: f.url ?? '', totp: f.totp ?? '',
-    permission: r.access.permission, updatedAt: r.updatedAt, data: r.data, recordKeyRaw: toBase64(await exportAesKey(r.key)),
+    permission: r.access.permission, updatedAt: r.updatedAt, recordKeyRaw: toBase64(await exportAesKey(r.key)),
   };
 }
 
@@ -88,12 +89,21 @@ async function deriveSecrets(user: SessionUser, password: string): Promise<Sessi
   return { dataKeyRaw: toBase64(await exportAesKey(dataKey)), privateKeyPkcs8: toBase64(privateKeyPkcs8) };
 }
 
-/** First download after sign-in/unlock; if it fails the keys are dropped again (locked), so a retry starts clean. */
+/**
+ * Whether a failed first download drops the keys again: only crypto failures (anything that is not a user-facing
+ * ExtError: keys that do not import, a malformed vault) and auth failures (401/403; a 401 has signed out already).
+ * A vault too large for storage.session ("Cofre grande demais…"), a network or a server error keeps them: the message
+ * says what went wrong, and a refresh retries without asking for the master password again.
+ */
+const dropsKeys = (e: unknown): boolean =>
+  !(e instanceof ExtError) || (e instanceof ExtApiError && (e.status === 401 || e.status === 403));
+
+/** First download after sign-in/unlock; on a crypto or auth failure the keys are dropped again (locked). */
 async function initialLoad(): Promise<void> {
   try {
     await loadVault(true);
   } catch (e) {
-    await saveSession({ secrets: null, vault: [] });
+    if (dropsKeys(e)) await saveSession({ secrets: null, vault: [] });
     throw e;
   }
 }
@@ -124,14 +134,10 @@ export async function unlock(password: string): Promise<void> {
 }
 
 let latestLoad = 0;
-let inFlight: Promise<void> | null = null;
+let inFlight: Promise<VaultResponse | null> | null = null;
 
-/**
- * Downloads and decrypts the vault into the session. Automatic calls run at most once per REFRESH_MIN_MS and share an
- * in-flight download; `force` always downloads. A snapshot is dropped when the vault was locked or re-keyed meanwhile,
- * or when a newer download started (its result wins).
- */
-export function loadVault(force = false): Promise<void> {
+/** Starts a download (or joins the in-flight one unless `force`); resolves to the downloaded response, or null when skipped. */
+function startLoad(force: boolean): Promise<VaultResponse | null> {
   if (!force && inFlight) return inFlight;
   const run = download(force, ++latestLoad);
   inFlight = run;
@@ -139,9 +145,19 @@ export function loadVault(force = false): Promise<void> {
   return run;
 }
 
-async function download(force: boolean, seq: number): Promise<void> {
+/**
+ * Downloads and decrypts the vault into the session. Automatic calls run at most once per REFRESH_MIN_MS and share an
+ * in-flight download; `force` always downloads. A snapshot is dropped when the vault was locked or re-keyed meanwhile,
+ * or when a newer download started (its result wins). A vault too large for storage.session rejects with a
+ * StorageQuotaError ("Cofre grande demais…", session.ts) and leaves the stored vault as it was.
+ */
+export async function loadVault(force = false): Promise<void> {
+  await startLoad(force);
+}
+
+async function download(force: boolean, seq: number): Promise<VaultResponse | null> {
   const s = await requireUnlocked();
-  if (!force && Date.now() - s.lastRefresh < REFRESH_MIN_MS) return;
+  if (!force && Date.now() - s.lastRefresh < REFRESH_MIN_MS) return null;
   const { secrets } = s;
   const keys = { dataKey: await importAesKey(fromBase64(secrets.dataKeyRaw)), privateKey: await importPrivateKey(fromBase64(secrets.privateKeyPkcs8)) };
   const dto = await authed(s, (api) => api.get<VaultResponse>('/api/vault'));
@@ -150,6 +166,15 @@ async function download(force: boolean, seq: number): Promise<void> {
   await updateSession((cur) =>
     cur.token === s.token && cur.secrets?.dataKeyRaw === secrets.dataKeyRaw && seq === latestLoad ? { vault, lastRefresh: Date.now() } : null,
   );
+  return dto;
+}
+
+/** One record's full RecordData, decrypted from its blob and validated as the web app does (vault/decrypt.ts). */
+async function openRecordData(key: CryptoKey, encData: string): Promise<RecordData> {
+  let parsed: ReturnType<typeof recordDataSchema.safeParse> | null;
+  try { parsed = recordDataSchema.safeParse(await decryptJson(key, encData)); } catch { parsed = null; }
+  if (!parsed?.success) throw new ExtError('Não foi possível abrir este registro. Atualize a senha pelo app.');
+  return parsed.data;
 }
 
 /** Creates a login record (fresh record key wrapped by the data key) and refreshes the vault; resolves to its id. */
@@ -172,16 +197,20 @@ export async function saveNewRecord(args: { url: string; login: string; password
 }
 
 /**
- * Replaces the password of a record the user can edit. The vault is downloaded first so the whole record is
- * re-encrypted from its latest version (no other field is reverted), then refreshed again.
+ * Replaces the password of a record the user can edit. The vault is downloaded first and this record's full data is
+ * decrypted from that fresh copy (the session keeps only the fillable fields), so the whole record is re-encrypted from
+ * its latest version (no other field is reverted); then the vault is refreshed again.
  */
 export async function updateRecordPassword(id: string, password: string): Promise<void> {
-  await loadVault(true);
+  const fresh = await startLoad(true);
   const s = await requireUnlocked();
   const r = findRecord(s.vault, id);
   if (r.permission === 'view') throw new ExtError(READ_ONLY_MESSAGE);
+  const dto = fresh?.records.find((x) => x.id === r.id);
+  if (!dto) throw new ExtError('Registro não encontrado');
   const key = await importAesKey(fromBase64(r.recordKeyRaw));
-  const next: RecordData = touchPasswordDates(r.data, { ...r.data, fields: { ...r.data.fields, password } });
+  const data = await openRecordData(key, dto.encData);
+  const next: RecordData = touchPasswordDates(data, { ...data, fields: { ...data.fields, password } });
   const encData = await encryptJson(key, next);
   await authed(s, (api) => api.put(`/api/records/${encodeURIComponent(r.id)}`, { encData }));
   await loadVault(true).catch(() => undefined);

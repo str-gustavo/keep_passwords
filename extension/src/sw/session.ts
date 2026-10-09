@@ -6,7 +6,6 @@
 // Layout: the core (everything but the vault and lastActivity) under SESSION_KEY, the decrypted vault under
 // SESSION_VAULT_KEY and lastActivity under SESSION_ACTIVITY_KEY, so a touch or a pending write never rewrites the vault.
 import type { SessionUser } from '@app/api/types';
-import type { RecordData } from '@app/record-types/record-data';
 import { DEFAULT_LOCK_MINUTES, MAX_LOCK_MINUTES, SERVER_KEY, SESSION_ACTIVITY_KEY, SESSION_KEY, SESSION_VAULT_KEY } from '@/shared/constants';
 import { ExtError } from '@/shared/errors';
 import type { ExtState, ExtStatus, Pending } from '@/shared/messages';
@@ -15,13 +14,14 @@ import { isServerOrigin } from '@/shared/server-url';
 /** base64 of the raw AES data key and of the PKCS#8 RSA private key. */
 export interface SessionSecrets { dataKeyRaw: string; privateKeyPkcs8: string }
 /**
- * A decrypted, fillable record. `data` (the full RecordData) and `recordKeyRaw` (base64 of the record's AES key) exist
- * so a password update can re-encrypt the whole record; they stay in storage.session and are never sent to the popup or
- * a content script (those get MatchItem).
+ * A decrypted, fillable record: only what filling, matching and search need. The full RecordData (notes, custom fields,
+ * attachments, history) is not kept — it would only bloat storage.session; a password update decrypts it from a fresh
+ * download instead. `recordKeyRaw` (base64 of the record's AES key) is for that update. Both stay in storage.session and
+ * are never sent to the popup or a content script (those get MatchItem).
  */
 export interface VaultRecordLite {
   id: string; type: string; title: string; login: string; password: string; url: string; totp: string;
-  permission: 'owner' | 'edit' | 'view'; updatedAt: string; data: RecordData; recordKeyRaw: string;
+  permission: 'owner' | 'edit' | 'view'; updatedAt: string; recordKeyRaw: string;
 }
 export interface SessionData {
   serverUrl: string | null; token: string | null; user: SessionUser | null; secrets: SessionSecrets | null;
@@ -72,6 +72,23 @@ function serialized<T>(task: () => Promise<T>): Promise<T> {
   return run;
 }
 
+export const VAULT_TOO_LARGE_MESSAGE = 'Cofre grande demais para a extensão. Reduza anexos/notas ou use o app.';
+/** storage.session refused a write for its size limit (QUOTA_BYTES): in practice, a vault too large to hold decrypted. */
+export class StorageQuotaError extends ExtError {
+  constructor() { super(VAULT_TOO_LARGE_MESSAGE); this.name = 'StorageQuotaError'; }
+}
+const isQuotaError = (e: unknown): boolean => /quota/i.test(e instanceof Error ? e.message : String(e));
+
+/** chrome.storage.session.set, with a quota rejection turned into a StorageQuotaError (shown to the user as is). */
+async function setSession(items: Record<string, unknown>): Promise<void> {
+  try {
+    await chrome.storage.session.set(items);
+  } catch (e) {
+    if (isQuotaError(e)) throw new StorageQuotaError();
+    throw e;
+  }
+}
+
 /** One storage.session.set with only the keys the patch touches; the core is merged onto `current`. */
 async function write(current: SessionData, patch: Partial<SessionData>): Promise<void> {
   const { vault, lastActivity, ...corePatch } = patch;
@@ -82,7 +99,7 @@ async function write(current: SessionData, patch: Partial<SessionData>): Promise
   }
   if (vault !== undefined) items[SESSION_VAULT_KEY] = vault;
   if (lastActivity !== undefined) items[SESSION_ACTIVITY_KEY] = lastActivity;
-  if (Object.keys(items).length > 0) await chrome.storage.session.set(items);
+  if (Object.keys(items).length > 0) await setSession(items);
   if ('serverUrl' in patch) {
     if (patch.serverUrl) await chrome.storage.local.set({ [SERVER_KEY]: patch.serverUrl });
     else await chrome.storage.local.remove(SERVER_KEY);
@@ -154,7 +171,7 @@ export function touch(now = Date.now()): Promise<void> {
   return serialized(async () => {
     const s = await resolved(false);
     if (isExpired(s, now)) await write(s, LOCKED);
-    else await chrome.storage.session.set({ [SESSION_ACTIVITY_KEY]: now });
+    else await setSession({ [SESSION_ACTIVITY_KEY]: now });
   });
 }
 

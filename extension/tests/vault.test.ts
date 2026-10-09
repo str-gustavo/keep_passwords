@@ -1,17 +1,31 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createAccountMaterial } from '@app/crypto/account';
-import { decryptJson, importAesKey, unwrapAesKey } from '@app/crypto/aes';
+import { decryptJson, encryptJson, importAesKey, unwrapAesKey } from '@app/crypto/aes';
 import { fromBase64 } from '@app/crypto/encoding';
 import { rsaWrapAesKey } from '@app/crypto/rsa';
 import { recordDataSchema, type RecordData } from '@app/record-types/record-data';
 import { t } from '@app/i18n/pt-br';
 import { loadVault, matches, saveNewRecord, search, signIn, unlock, updateRecordPassword } from '@/sw/vault';
 import { loadSession, lockSession, saveSession, stateOf } from '@/sw/session';
-import { EMAIL_KEY } from '@/shared/constants';
+import { EMAIL_KEY, SESSION_VAULT_KEY } from '@/shared/constants';
 import { getChromeMock, resetChromeMock } from './helpers/chrome-mock';
 import { r, realKeys, recordDto, stubFetch, user } from './helpers/fixtures';
 
 const SERVER = 'http://localhost:3000';
+const TOO_LARGE = 'Cofre grande demais para a extensão. Reduza anexos/notas ou use o app.';
+
+// The mock's own storage.session.set, captured before any test overrides it (resetChromeMock restores it in place).
+const realSessionSet = getChromeMock().storage.session.set.getMockImplementation()!;
+/** storage.session refuses every write that carries a non-empty vault, like Chrome past its QUOTA_BYTES. */
+function vaultOverQuota(message = 'Session storage quota bytes exceeded. Values were not stored.') {
+  getChromeMock().storage.session.set.mockImplementation(async (items: Record<string, unknown>) => {
+    const v = items[SESSION_VAULT_KEY];
+    if (Array.isArray(v) && v.length > 0) throw new Error(message);
+    return realSessionSet(items);
+  });
+}
+/** Everything storage.session holds, serialized. */
+const storedSession = () => JSON.stringify(Object.fromEntries(getChromeMock().storage.session.data));
 
 beforeEach(() => resetChromeMock());
 afterEach(() => vi.unstubAllGlobals());
@@ -48,7 +62,7 @@ describe('search', () => {
 });
 
 describe('loadVault', () => {
-  it('decrypts (data, rsa and folder-less paths), reduces to fillable types and keeps data + record key in session only', async () => {
+  it('decrypts (data, rsa and folder-less paths), reduces to fillable types and keeps the fillable fields + record key in session only', async () => {
     const k = await realKeys();
     const dtos = await Promise.all([
       recordDto(k.dataKey, { id: '1', fields: { login: 'ana', password: 'pw1', url: 'https://github.com', totp: 'otpauth://totp/x?secret=ABC' }, data: { notes: 'nota' } }),
@@ -67,12 +81,43 @@ describe('loadVault', () => {
     expect(s.vault.map((x) => x.id)).toEqual(['1', '4', '5', '7']);
     const [one, , five] = s.vault;
     expect(one).toMatchObject({ type: 'login', title: '1', login: 'ana', password: 'pw1', url: 'https://github.com', totp: 'otpauth://totp/x?secret=ABC', permission: 'owner', updatedAt: '2026-01-02T00:00:00.000Z' });
-    expect(one!.data.notes).toBe('nota');
+    expect(one).not.toHaveProperty('data'); // the full RecordData stays encrypted on the server
     expect(five).toMatchObject({ login: 'shared', password: 'pw5', url: '', permission: 'view' });
     // The stored record key really is the key of that record.
     const key = await importAesKey(fromBase64(one!.recordKeyRaw));
     expect((await decryptJson<RecordData>(key, dtos[0]!.encData)).fields.password).toBe('pw1');
     expect(s.lastRefresh).toBeGreaterThan(0);
+  });
+
+  it('keeps no RecordData in storage.session: notes, custom fields and attachments stay encrypted', async () => {
+    const k = await realKeys();
+    const dto = await recordDto(k.dataKey, {
+      id: '1', fields: { login: 'ana', password: 'pw1', url: 'https://github.com' },
+      data: { notes: 'NOTA-'.repeat(20_000), custom: [{ label: 'PIN', kind: 'secret', value: 'PIN-SECRETO' }], attachments: [{ id: 'a1', name: 'contrato.pdf', size: 10, mime: 'application/pdf' }] },
+    });
+    stubFetch({ 'GET /api/vault': () => ({ body: { records: [dto], folders: [] } }) });
+    await saveSession({ serverUrl: SERVER, token: 'tok', user, secrets: k.secrets });
+
+    await loadVault(true);
+    const [one] = (await loadSession()).vault;
+    expect(Object.keys(one!).sort()).toEqual(['id', 'login', 'password', 'permission', 'recordKeyRaw', 'title', 'totp', 'type', 'updatedAt', 'url']);
+    const stored = storedSession();
+    expect(stored).not.toMatch(/NOTA-|PIN-SECRETO|contrato\.pdf|"data"|"notes"|"custom"|"attachments"/);
+    expect(stored.length).toBeLessThan(5_000);
+  });
+
+  it('a vault over the storage.session quota fails with a specific message and keeps the keys', async () => {
+    const k = await realKeys();
+    const dto = await recordDto(k.dataKey, { id: '1', fields: { login: 'ana', password: 'pw1', url: 'https://github.com' } });
+    stubFetch({ 'GET /api/vault': () => ({ body: { records: [dto], folders: [] } }) });
+    await saveSession({ serverUrl: SERVER, token: 'tok', user, secrets: k.secrets });
+    vaultOverQuota('QUOTA_BYTES quota exceeded');
+
+    await expect(loadVault(true)).rejects.toThrow(TOO_LARGE);
+    const s = await loadSession();
+    expect(s.secrets).toEqual(k.secrets);
+    expect(stateOf(s).status).toBe('unlocked');
+    expect(s.vault).toEqual([]);
   });
 
   it('downloads at most once per REFRESH_MIN_MS unless forced', async () => {
@@ -153,6 +198,42 @@ describe('saveNewRecord / updateRecordPassword', () => {
     expect(data.passwordChangedAt.password).not.toBe('2020-01-01T00:00:00.000Z');
   });
 
+  it('re-encrypts the full record as the fresh download has it (edited elsewhere meanwhile), not a stale copy', async () => {
+    const k = await realKeys();
+    let dto = await recordDto(k.dataKey, { id: '1', fields: { login: 'ana', password: 'old', url: 'https://github.com' }, data: { notes: 'nota' } });
+    const { calls } = stubFetch({ 'GET /api/vault': () => ({ body: { records: [dto], folders: [] } }), 'PUT /api/records/1': () => ({ body: { record: { id: '1', updatedAt: 'u' } } }) });
+    await saveSession({ serverUrl: SERVER, token: 'tok', user, secrets: k.secrets });
+    await loadVault(true);
+    const recordKey = await importAesKey(fromBase64((await loadSession()).vault[0]!.recordKeyRaw));
+    // Edited in the web app after the extension's last download: new notes, a custom field, an attachment.
+    const v1 = await decryptJson<RecordData>(recordKey, dto.encData);
+    const edited: RecordData = {
+      ...v1, notes: 'nota nova', fields: { ...v1.fields, login: 'ana.nova' },
+      custom: [{ label: 'PIN', kind: 'secret', value: '1234' }], attachments: [{ id: 'a1', name: 'contrato.pdf', size: 10, mime: 'application/pdf' }],
+    };
+    dto = { ...dto, encData: await encryptJson(recordKey, edited) };
+
+    await updateRecordPassword('1', 'new');
+    const body = calls.find((c) => c.method === 'PUT')!.body as { encData: string };
+    const data = await decryptJson<RecordData>(recordKey, body.encData);
+    expect(recordDataSchema.safeParse(data).success).toBe(true);
+    expect(data).toMatchObject({ ...edited, fields: { login: 'ana.nova', password: 'new', url: 'https://github.com' }, passwordChangedAt: { password: expect.any(String) } });
+    // The full data was only needed for that write: storage.session still holds none of it.
+    expect(storedSession()).not.toMatch(/nota nova|contrato\.pdf|"custom"/);
+  });
+
+  it('refuses to overwrite a record whose fresh copy does not decrypt to valid data', async () => {
+    const k = await realKeys();
+    let dto = await recordDto(k.dataKey, { id: '1', fields: { login: 'ana', password: 'old', url: 'https://github.com' } });
+    const { calls } = stubFetch({ 'GET /api/vault': () => ({ body: { records: [dto], folders: [] } }), 'PUT /api/records/1': () => ({ body: { record: { id: '1', updatedAt: 'u' } } }) });
+    await saveSession({ serverUrl: SERVER, token: 'tok', user, secrets: k.secrets });
+    await loadVault(true);
+    const recordKey = await importAesKey(fromBase64((await loadSession()).vault[0]!.recordKeyRaw));
+    dto = { ...dto, encData: await encryptJson(recordKey, { title: 'sem campos' }) }; // not a RecordData: the fresh download drops it
+    await expect(updateRecordPassword('1', 'new')).rejects.toThrow('Registro não encontrado');
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
+  });
+
   it('refuses read-only and unknown records without writing', async () => {
     const k = await realKeys();
     const dto = await recordDto(k.dataKey, { id: '1', fields: { password: 'old' }, permission: 'view' });
@@ -174,7 +255,8 @@ describe('signIn / unlock (real KDF)', () => {
     sessionUser = { id: 'u1', email, name: 'Ana', lockMinutes: 5, kdfSalt: m.kdfSalt, kdfIterations: m.kdfIterations, encDataKey: m.encDataKey, publicKey: m.publicKey, encPrivateKey: m.encPrivateKey };
   }, 30_000);
 
-  const server = async (over: { preIterations?: number; userIterations?: number; meIterations?: number } = {}) => {
+  type VaultRoute = () => { status?: number; body?: unknown };
+  const server = async (over: { preIterations?: number; userIterations?: number; meIterations?: number; vault?: VaultRoute } = {}) => {
     const dto = await recordDto(m.dataKey, { id: '1', fields: { login: email, password: 'site-pw', url: 'https://github.com' } });
     return stubFetch({
       'GET /api/auth/me': (c) =>
@@ -186,7 +268,7 @@ describe('signIn / unlock (real KDF)', () => {
         (c.body as { authKey: string }).authKey === m.authKey
           ? { body: { user: { ...sessionUser, kdfIterations: over.userIterations ?? m.kdfIterations }, token: 'jwt-token' } }
           : { status: 401, body: { error: { code: 'invalid_credentials', message: 'E-mail ou senha incorretos' } } },
-      'GET /api/vault': () => ({ body: { records: [dto], folders: [] } }),
+      'GET /api/vault': over.vault ?? (() => ({ body: { records: [dto], folders: [] } })),
     });
   };
 
@@ -237,6 +319,49 @@ describe('signIn / unlock (real KDF)', () => {
     const s = await loadSession();
     expect(stateOf(s)).toMatchObject({ status: 'unlocked', lockMinutes: 7 });
     expect(s.vault).toHaveLength(1);
+  }, 30_000);
+
+  it('unlock keeps the keys when the vault is too large for storage.session, and says so', async () => {
+    await server();
+    await saveSession({ serverUrl: SERVER, token: 'jwt-token', user: sessionUser });
+    vaultOverQuota();
+    await expect(unlock(password)).rejects.toThrow(TOO_LARGE);
+    const s = await loadSession();
+    expect(stateOf(s).status).toBe('unlocked');
+    expect(s.secrets).not.toBeNull();
+    expect(s.vault).toEqual([]);
+  }, 30_000);
+
+  it('signIn keeps the keys too when the vault is too large', async () => {
+    await server();
+    vaultOverQuota();
+    await expect(signIn(SERVER, email, password)).rejects.toThrow(TOO_LARGE);
+    expect(stateOf(await loadSession()).status).toBe('unlocked');
+  }, 30_000);
+
+  it('unlock keeps the keys when the first download fails on the network or server side (a refresh retries it)', async () => {
+    await server({ vault: () => ({ status: 503, body: { error: { code: 'unavailable', message: 'Servidor indisponível' } } }) });
+    await saveSession({ serverUrl: SERVER, token: 'jwt-token', user: sessionUser });
+    await expect(unlock(password)).rejects.toThrow('Servidor indisponível');
+    expect(stateOf(await loadSession()).status).toBe('unlocked');
+  }, 30_000);
+
+  it('unlock drops the keys again when the first download fails unexpectedly (not a user-facing error)', async () => {
+    await server({ vault: () => ({ body: { records: 'nope' } }) });
+    await saveSession({ serverUrl: SERVER, token: 'jwt-token', user: sessionUser });
+    await expect(unlock(password)).rejects.toThrow();
+    const s = await loadSession();
+    expect(stateOf(s).status).toBe('locked');
+    expect(s.secrets).toBeNull();
+  }, 30_000);
+
+  it('a 401 on the first download signs out (keys and token gone)', async () => {
+    await server({ vault: () => ({ status: 401, body: { error: { code: 'unauthorized', message: 'Sessão expirada. Entre novamente.' } } }) });
+    await saveSession({ serverUrl: SERVER, token: 'jwt-token', user: sessionUser });
+    await expect(unlock(password)).rejects.toThrow('Sessão expirada. Entre novamente.');
+    const s = await loadSession();
+    expect(stateOf(s).status).toBe('signed-out');
+    expect(s.secrets).toBeNull();
   }, 30_000);
 
   it('unlock refuses an account with unsafe KDF parameters', async () => {

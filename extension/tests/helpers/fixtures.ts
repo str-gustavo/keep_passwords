@@ -14,8 +14,7 @@ export const user: SessionUser = { id: 'u', email: 'a@b.c', name: 'A', lockMinut
 export const secrets: SessionSecrets = { dataKeyRaw: 'k', privateKeyPkcs8: 'p' };
 
 export const r = (o: Partial<VaultRecordLite> = {}): VaultRecordLite => ({
-  id: 'x', type: 'login', title: 'T', login: 'l', password: 'p', url: '', totp: '', permission: 'owner', updatedAt: '',
-  data: emptyRecordData('login'), recordKeyRaw: '', ...o,
+  id: 'x', type: 'login', title: 'T', login: 'l', password: 'p', url: '', totp: '', permission: 'owner', updatedAt: '', recordKeyRaw: '', ...o,
 });
 
 /** A content script running in the top frame of a tab showing `url` (own extension id, like Chrome sets it). */

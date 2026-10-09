@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { handle } from '@/sw/router';
-import { loadSession, saveSession, signOutSession, stateOf } from '@/sw/session';
+import { StorageQuotaError, loadSession, saveSession, signOutSession, stateOf } from '@/sw/session';
 import * as vault from '@/sw/vault';
 import { ExtApiError } from '@/sw/api';
 import { SERVER_KEY } from '@/shared/constants';
@@ -409,6 +409,13 @@ describe('server and account', () => {
     await handle({ type: 'refresh', force: true }, popupSender);
     expect(vault.loadVault).toHaveBeenLastCalledWith(true);
     await expect(handle({ type: 'refresh', force: 'yes' } as unknown as Req, popupSender)).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
+  });
+
+  it('a vault too large for storage.session is reported as such, and the vault stays unlocked', async () => {
+    await unlocked();
+    vi.mocked(vault.loadVault).mockRejectedValueOnce(new StorageQuotaError());
+    await expect(handle({ type: 'refresh', force: true }, popupSender)).resolves.toEqual({ ok: false, error: 'Cofre grande demais para a extensão. Reduza anexos/notas ou use o app.' });
+    expect(stateOf(await loadSession()).status).toBe('unlocked');
   });
 });
 
