@@ -185,3 +185,5 @@ export async function changeMasterPassword(current: string, next: string): Promi
 }
 export async function updateSettings(p: { name?: string; lockMinutes?: number }) { const { user } = await api.put<LoginResponse>('/api/account/settings', p); s().setUser(user); }
 export async function logout() { try { await clearClipboardIfOwned(); await api.post('/api/auth/logout'); } finally { s().reset(); } }
+/** Locks now (the account menu and the auto-lock): keys and decrypted data leave memory; the clipboard is cleared if it still holds our copy. */
+export function lockVault() { void clearClipboardIfOwned(); s().lock(); }

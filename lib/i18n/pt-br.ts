@@ -375,4 +375,10 @@ export const t = {
   shareFolderRemoveLabel: (email: string) => `Remover da pasta compartilhada de ${email}`,
   shareFolderRemove: 'Remover da pasta',
   shareFolderRemoved: 'Registro removido da pasta compartilhada',
+  // Trilho de navegação (Rail): menu da conta.
+  account: 'Conta',
+  accountOf: (email: string) => `Conta: ${email}`,
+  lockVault: 'Bloquear cofre',
+  themeDark: 'Tema escuro',
+  themeLight: 'Tema claro',
 } as const;

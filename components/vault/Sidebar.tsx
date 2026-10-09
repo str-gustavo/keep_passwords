@@ -88,7 +88,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
               <SidebarLink
                 key={folder.id} href={folderHref(folder.id)} icon={Folder} label={folder.name} testId={`nav-folder-${folder.id}`} depth={depth}
                 active={pathname === folderHref(folder.id)} onNavigate={onClose}
-                trailing={<FolderHeaderActions folder={folder} variant="sidebar" menuTestId={`nav-folder-menu-${folder.id}`} />}
+                trailing={<FolderHeaderActions folder={folder} variant="compact" menuTestId={`nav-folder-menu-${folder.id}`} />}
               />
             ))}
           </SidebarSection>
@@ -99,7 +99,7 @@ export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void 
               <SidebarLink
                 key={folder.id} href={folderHref(folder.id)} icon={Users} label={folder.name} testId={`nav-folder-${folder.id}`}
                 active={pathname === folderHref(folder.id)} onNavigate={onClose}
-                trailing={<FolderHeaderActions folder={folder} variant="sidebar" menuTestId={`nav-folder-menu-${folder.id}`} />}
+                trailing={<FolderHeaderActions folder={folder} variant="compact" menuTestId={`nav-folder-menu-${folder.id}`} />}
               />
             ))}
           </SidebarSection>

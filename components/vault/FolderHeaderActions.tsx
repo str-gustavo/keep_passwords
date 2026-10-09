@@ -20,11 +20,12 @@ const iconCls = 'h-4 w-4 shrink-0';
 
 /**
  * Folder actions menu (rename / new subfolder / members / delete), filtered by what the caller may do.
- * `variant="header"` also shows the member count of a shared folder; `variant="sidebar"` is the compact
- * per-folder menu of the sidebar, whose trigger fades in on hover/focus of the enclosing `group` row (lg and up). Dialogs are mounted only while open, so their test ids stay unique on the page, and
- * portalled to <body> so the sidebar row's hover opacity or the closed drawer's visibility never reaches them.
+ * `variant="header"` also shows the member count of a shared folder; `variant="compact"` is the per-folder menu of
+ * the rail's folders panel, whose trigger fades in on hover/focus of the enclosing `group` row (lg and up). Dialogs are
+ * mounted only while open, so their test ids stay unique on the page, and portalled to <body> so the row's hover
+ * opacity never reaches them (the panel ignores clicks and Escape inside them).
  */
-export function FolderHeaderActions({ folder, variant = 'header', menuTestId = 'folder-menu' }: { folder: VaultFolder; variant?: 'header' | 'sidebar'; menuTestId?: string }) {
+export function FolderHeaderActions({ folder, variant = 'header', menuTestId = 'folder-menu' }: { folder: VaultFolder; variant?: 'header' | 'compact'; menuTestId?: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const [dialog, setDialog] = useState<FolderDialogKind | null>(null);
@@ -65,7 +66,7 @@ export function FolderHeaderActions({ folder, variant = 'header', menuTestId = '
             <span
               className={cn(
                 'flex items-center justify-center rounded-lg transition-colors',
-                variant === 'header' ? 'h-9 w-9 border border-border text-fg-muted hover:bg-surface-2 hover:text-fg' : 'h-7 w-7 text-rail-fg/70 transition-opacity hover:bg-rail-fg/10 hover:text-rail-fg lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 lg:group-has-[[aria-expanded=true]]:opacity-100',
+                variant === 'header' ? 'h-9 w-9 border border-border text-fg-muted hover:bg-surface-2 hover:text-fg' : 'h-7 w-7 text-fg-muted transition-opacity hover:bg-surface-2 hover:text-fg lg:opacity-0 lg:group-focus-within:opacity-100 lg:group-hover:opacity-100 lg:group-has-[[aria-expanded=true]]:opacity-100',
               )}
             >
               <EllipsisVertical className="h-4 w-4" aria-hidden="true" />
