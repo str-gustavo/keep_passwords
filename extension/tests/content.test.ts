@@ -6,7 +6,7 @@ vi.mock('@/shared/messages', () => ({ send: vi.fn() }));
 import { send } from '@/shared/messages';
 import { ContentScript, shouldRun, startContentScript } from '@/content/controller';
 import { allowSyntheticEvents, shadowOf } from '@/content/host';
-import { hideToast } from '@/content/toast';
+import { hideToast, showNotice } from '@/content/toast';
 import { PALETTE } from '@/content/styles';
 import { resetChromeMock } from './helpers/chrome-mock';
 
@@ -453,6 +453,18 @@ describe('menu: closing and keyboard', () => {
     byId('u').focus();
     await new Promise((r) => setTimeout(r, 10));
     expect(menuHost()).toBeNull();
+  });
+
+  it('stays open when focus moves into another of our overlays (the toast)', async () => {
+    two();
+    start(LOGIN);
+    await openMenu();
+    showNotice(document, 'Aviso');
+    const toastClose = toastRoot().querySelector<HTMLElement>('button')!;
+    toastClose.focus();
+    expect(document.activeElement).toBe(toastHost());
+    await new Promise((r) => setTimeout(r, 10));
+    expect(menuHost()).not.toBeNull();
   });
 
   it('ignores synthetic (untrusted) clicks outside tests', async () => {

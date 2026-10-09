@@ -123,6 +123,25 @@ export function h<K extends keyof HTMLElementTagNameMap>(
 /** Below this effective opacity an overlay counts as hidden by the page. */
 const MIN_OPACITY = 0.5;
 
+const FILTER_OPACITY = /\bopacity\(([^)]*)\)/gi;
+const NUMBER_OR_PERCENT = /^(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?%?$/i;
+
+/**
+ * The product of the `opacity(…)` functions in a computed `filter` (1 when there is none; `opacity()` is 1; values are
+ * clamped to [0, 1]). NaN when an argument cannot be read (e.g. a calc() left unresolved): the caller fails closed.
+ */
+function filterOpacity(filter: string): number {
+  let product = 1;
+  for (const [, raw = ''] of filter.matchAll(FILTER_OPACITY)) {
+    const arg = raw.trim();
+    if (arg === '') continue;
+    if (!NUMBER_OR_PERCENT.test(arg)) return Number.NaN;
+    const value = Number.parseFloat(arg) / (arg.endsWith('%') ? 100 : 1);
+    product *= Math.min(1, Math.max(0, value));
+  }
+  return product;
+}
+
 const MASK_PROPERTIES = ['mask-image', '-webkit-mask-image'] as const;
 const hasMask = (s: CSSStyleDeclaration) => MASK_PROPERTIES.some((p) => { const v = s.getPropertyValue(p).trim(); return v !== '' && v !== 'none'; });
 
@@ -132,8 +151,9 @@ const hasMask = (s: CSSStyleDeclaration) => MASK_PROPERTIES.some((p) => { const 
  * !important (opacity, mask, filter, transforms…), but the page can still act on <html>, its only ancestor. Hidden
  * means any of:
  * - `checkVisibility` with opacity/visibility says hidden;
- * - on the host or an ancestor: effective opacity below 0.5, a `filter` with `opacity(…)`, or a mask image (masks and
- *   filters do not affect hit-testing, so a masked overlay still takes clicks).
+ * - on the host and its ancestors: an effective opacity below 0.5 — the product of every `opacity` and every `filter:
+ *   opacity(…)` value (an unreadable one counts as hidden) — or a mask image (masks and filters do not affect
+ *   hit-testing, so a masked overlay still takes clicks).
  * Other filters and transforms on <html> are tolerated: sites use them for themes and smooth scrolling.
  */
 export function overlayVisible(host: HTMLElement): boolean {
@@ -145,17 +165,30 @@ export function overlayVisible(host: HTMLElement): boolean {
     const s = win.getComputedStyle(el);
     const value = Number.parseFloat(s.getPropertyValue('opacity'));
     if (!Number.isNaN(value)) opacity *= value;
-    if (s.getPropertyValue('filter').includes('opacity(') || hasMask(s)) return false;
+    const filtered = filterOpacity(s.getPropertyValue('filter'));
+    if (Number.isNaN(filtered) || hasMask(s)) return false;
+    opacity *= filtered;
   }
   return opacity >= MIN_OPACITY;
 }
 
+/** Whether the engine implements IntersectionObserver v2 (`isVisible` on its entries). */
+function engineHasVisibilityV2(doc: Document): boolean {
+  const Entry = doc.defaultView?.IntersectionObserverEntry ?? globalThis.IntersectionObserverEntry;
+  return typeof Entry === 'function' && 'isVisible' in Entry.prototype;
+}
+
 /**
- * Whether Chrome's IntersectionObserver v2 last reported `host` as not visible (occluded, faded, filtered, transformed —
- * including harmless site-wide filters/transforms on <html>). Gates only the sensitive actions (filling, copying), not
- * opening or closing; false when the engine has no v2 or has not reported yet.
+ * Whether Chrome's IntersectionObserver v2 does not vouch for `host` being visible: its last verdict was "not visible"
+ * (occluded, faded, filtered, transformed — including harmless site-wide filters/transforms on <html>), or, on an
+ * engine with v2, it has not reported yet (fail closed: a page could act in the first ~100 ms after mounting). Gates
+ * only the sensitive actions (filling, copying), not opening or closing; false on an engine without v2.
  */
-export const engineReportsHidden = (host: HTMLElement): boolean => engineVisibility.get(host) === false;
+export function engineReportsHidden(host: HTMLElement): boolean {
+  const verdict = engineVisibility.get(host);
+  if (verdict !== undefined) return !verdict;
+  return engineHasVisibilityV2(host.ownerDocument);
+}
 
 let syntheticAllowed = false;
 /** Test hook: jsdom cannot produce trusted events. Never called by the shipped script. */

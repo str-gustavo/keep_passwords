@@ -1,5 +1,5 @@
 import { nexusMark } from './brand';
-import { createOverlay, engineReportsHidden, h, isUserEvent, overlayVisible, removeOverlay, setHostStyles } from './host';
+import { createOverlay, engineReportsHidden, h, isOverlayHost, isUserEvent, overlayVisible, removeOverlay, setHostStyles } from './host';
 import { errorText, T } from './strings';
 import { MENU_CSS } from './styles';
 
@@ -197,17 +197,19 @@ export class InlineMenu {
   };
 
   /**
-   * Focus leaving the menu for the page closes it. Moves inside the menu or to the field's icon (which toggles the menu)
-   * do not, nor does the whole window losing focus (e.g. the extension popup opening).
+   * Focus leaving the menu for the page closes it. Moves inside the menu, to the field's icon (which toggles the menu) or
+   * into another of our overlays (the toast) do not, nor does the whole window losing focus (e.g. the extension popup
+   * opening). Focus inside another closed root shows up as its host, both as relatedTarget and as activeElement.
    */
   private readonly onFocusOut = (e: FocusEvent): void => {
     const next = e.relatedTarget as Node | null;
-    if (next && (this.root.contains(next) || this.opts.isOwnTarget([next]))) return;
+    if (next && (this.root.contains(next) || isOverlayHost(next) || this.opts.isOwnTarget([next]))) return;
     clearTimeout(this.focusTimer);
     this.focusTimer = setTimeout(() => {
       const doc = this.anchor.ownerDocument;
       const active = doc.activeElement;
-      if (this.isClosed || !doc.hasFocus() || active === this.host || (active && this.opts.isOwnTarget([active]))) return;
+      if (this.isClosed || !doc.hasFocus()) return;
+      if (active && (active === this.host || isOverlayHost(active) || this.opts.isOwnTarget([active]))) return;
       this.close(false);
     }, 0);
   };

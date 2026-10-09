@@ -97,6 +97,35 @@ describe('overlayVisible', () => {
     removeOverlay(host);
   });
 
+  it('reads the filter opacity() value: opacity(1) is visible, a low or unreadable one is not', () => {
+    const { host } = createOverlay(document, 'nexus-passwords-toast', TOAST_CSS);
+    const withFilter = (filter: string) => {
+      overrides.set(document.documentElement, { filter });
+      return overlayVisible(host);
+    };
+    expect(withFilter('opacity(1)')).toBe(true);
+    expect(withFilter('opacity(100%)')).toBe(true);
+    expect(withFilter('opacity()')).toBe(true); // opacity() is opacity(1)
+    expect(withFilter('grayscale(1) opacity(0.9)')).toBe(true);
+    expect(withFilter('opacity(0.4)')).toBe(false);
+    expect(withFilter('opacity(40%)')).toBe(false);
+    expect(withFilter('opacity(.2) grayscale(1)')).toBe(false);
+    expect(withFilter('opacity(0.8) opacity(0.6)')).toBe(false); // 0.48: the functions multiply
+    expect(withFilter('opacity(calc(0.2 + 0.1))')).toBe(false); // unreadable: hidden
+    removeOverlay(host);
+  });
+
+  it('multiplies the filter opacity() with the ancestors\' opacity', () => {
+    const { host } = createOverlay(document, 'nexus-passwords-toast', TOAST_CSS);
+    document.documentElement.style.opacity = '0.8';
+    overrides.set(document.documentElement, { filter: 'opacity(0.7)' }); // 0.56
+    expect(overlayVisible(host)).toBe(true);
+    overrides.set(document.documentElement, { filter: 'opacity(0.6)' }); // 0.48
+    expect(overlayVisible(host)).toBe(false);
+    document.documentElement.style.opacity = '';
+    removeOverlay(host);
+  });
+
   it('a masked menu takes no fill click', async () => {
     start();
     iconButton().click();
@@ -183,6 +212,35 @@ describe('IntersectionObserver v2 gate', () => {
     cs!.stop();
     cs = null;
     expect(unobserved).toContain(host);
+  });
+
+  it('v2 supported (isVisible on IntersectionObserverEntry): no verdict yet counts as hidden for fills, not for opening', async () => {
+    vi.stubGlobal('IntersectionObserverEntry', class { get isVisible() { return true; } });
+    start();
+    iconButton().click(); // the icon has no verdict either: opening is never gated by v2
+    await flush();
+    const menu = menuHost()!;
+    expect(menu).not.toBeNull();
+    expect(engineReportsHidden(menu)).toBe(true);
+    menuItems()[0]!.click();
+    await flush();
+    expect(sent('fillRequest')).toHaveLength(0);
+    expect(byId('p').value).toBe('');
+    expect(shadowOf(menu)!.querySelector('[role="alert"]')?.textContent).toBe(NOT_CONFIRMED);
+    report!([{ target: menu, isVisible: true }]);
+    expect(engineReportsHidden(menu)).toBe(false);
+    menuItems()[0]!.click();
+    await flush();
+    expect(byId('p').value).toBe(SECRET);
+  });
+
+  it('v2 unsupported (no isVisible on the entry prototype): no verdict means allowed', () => {
+    vi.stubGlobal('IntersectionObserverEntry', class {});
+    const { host } = createOverlay(document, 'nexus-passwords-toast', TOAST_CSS);
+    expect(engineReportsHidden(host)).toBe(false);
+    report!([{ target: host, isVisible: false }]);
+    expect(engineReportsHidden(host)).toBe(true);
+    removeOverlay(host);
   });
 
   it('non-sensitive entries still work; the toast refuses Copiar / Preencher código with the message', async () => {
