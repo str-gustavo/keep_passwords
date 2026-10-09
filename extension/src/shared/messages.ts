@@ -3,6 +3,8 @@
 // master password, a key or another record's password; `fillRequest` hands over one record's login and password only
 // after the service worker checked that the record belongs to the sender's page. The only other password that crosses
 // a message is a freshly generated one (`fillGeneratedFromPopup` → `fillGenerated`), which is not a vault secret.
+// Reads (`getState`, `matchesForUrl`, `search`, `getPending`) never extend the session, from the popup or a page; only
+// the popup's actions and a page's validated actions count as activity (router.ts, POPUP_ACTIVITY).
 
 export type ExtStatus = 'needs-server' | 'signed-out' | 'locked' | 'unlocked';
 export interface ExtState { status: ExtStatus; serverUrl: string | null; email: string | null; lockMinutes: number; recordCount: number }

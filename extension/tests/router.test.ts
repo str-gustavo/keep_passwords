@@ -93,6 +93,14 @@ describe('request-time auto-lock', () => {
     expect(s.vault).toEqual([]);
   });
 
+  it('an expired session answers locked to a popup getState (request-time auto-lock still runs)', async () => {
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: Date.now() - 2 * 60_000 });
+    await expect(handle({ type: 'getState' }, popupSender)).resolves.toEqual({ ok: true, data: { status: 'locked', serverUrl: SERVER, email: 'a@b.c', lockMinutes: 1, recordCount: 0 } });
+    const s = await loadSession();
+    expect(s.secrets).toBeNull();
+    expect(s.vault).toEqual([]);
+  });
+
   it('a popup request on an expired session locks instead of extending it', async () => {
     await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: Date.now() - 2 * 60_000 });
     await expect(handle({ type: 'search', query: '' }, popupSender)).resolves.toEqual({ ok: false, error: 'Cofre bloqueado' });
@@ -143,14 +151,21 @@ describe('getState', () => {
     expect(JSON.stringify(res)).not.toMatch(/secret-token|encDataKey|kdfSalt/);
   });
 
-  it('while unlocked carries only a count; from a page it does not count as activity, from the popup it does', async () => {
+  it('while unlocked carries only a count and counts as activity for nobody, page or popup', async () => {
     const before = Date.now() - 30_000;
     await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github, bank], lastActivity: before });
     const res = await handle({ type: 'getState' }, pageSender('https://github.com'));
     expect(res).toEqual({ ok: true, data: { status: 'unlocked', serverUrl: SERVER, email: 'a@b.c', lockMinutes: 1, recordCount: 2 } });
     expect((await loadSession()).lastActivity).toBe(before);
     await handle({ type: 'getState' }, popupSender);
-    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
+    expect((await loadSession()).lastActivity).toBe(before);
+  });
+
+  it('getState from /popup.html leaves lastActivity unchanged (the popup polls it every 5 s)', async () => {
+    const before = Date.now() - 30_000;
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github], lastActivity: before });
+    for (let i = 0; i < 3; i++) await expect(handle({ type: 'getState' }, popupSender)).resolves.toMatchObject({ ok: true, data: { status: 'unlocked' } });
+    expect((await loadSession()).lastActivity).toBe(before);
   });
 });
 
@@ -178,7 +193,7 @@ describe('revealPassword', () => {
 describe('popup-only messages', () => {
   const popupOnly: Req[] = [
     { type: 'setServer', url: 'https://cofre.example.com' }, { type: 'signIn', email: 'a@b.c', password: 'x' }, { type: 'unlock', password: 'x' },
-    { type: 'signOut' }, { type: 'refresh' }, { type: 'search', query: '' }, { type: 'fillFromPopup', id: '1', tabId: 7 },
+    { type: 'lock' }, { type: 'signOut' }, { type: 'refresh' }, { type: 'search', query: '' }, { type: 'fillFromPopup', id: '1', tabId: 7 },
     { type: 'revealPassword', id: '1' }, { type: 'clipboardArm', token: 'q2VtLm5leHVzLnRva2VuMQ==' },
     { type: 'fillGeneratedFromPopup', tabId: 7, password: 'G3r@d4!' },
   ];
@@ -188,6 +203,41 @@ describe('popup-only messages', () => {
     expect(vault.signIn).not.toHaveBeenCalled();
     expect(vault.unlock).not.toHaveBeenCalled();
     expect(stateOf(await loadSession()).status).toBe('unlocked');
+  });
+});
+
+describe('session activity: popup actions and validated page actions extend it, reads never do', () => {
+  const idleSince = async () => {
+    const before = Date.now() - 30_000; // lockMinutes is 1: still active
+    await saveSession({ serverUrl: SERVER, token: 't', user, secrets, vault: [github, bank], lastActivity: before });
+    return before;
+  };
+  const reads: Req[] = [{ type: 'getState' }, { type: 'matchesForUrl', url: 'https://github.com' }, { type: 'search', query: 'banco' }, { type: 'getPending' }];
+  it.each(reads)('$type from the popup leaves lastActivity unchanged', async (req) => {
+    const before = await idleSince();
+    await handle(req, popupSender);
+    expect((await loadSession()).lastActivity).toBe(before);
+  });
+  it.each(reads)('$type from a page leaves lastActivity unchanged', async (req) => {
+    const before = await idleSince();
+    await handle(req, pageSender('https://github.com/login'));
+    expect((await loadSession()).lastActivity).toBe(before);
+  });
+
+  const popupActions: Req[] = [
+    { type: 'setServer', url: `${SERVER}/` }, { type: 'signIn', email: 'a@b.c', password: 'x' }, { type: 'unlock', password: 'x' }, { type: 'refresh' },
+    { type: 'revealPassword', id: '1' }, { type: 'fillFromPopup', id: '1', tabId: 1 }, { type: 'totpFor', id: '1' },
+    { type: 'generatePassword', opts: { length: 20, upper: true, lower: true, digits: true, symbols: true, excludeAmbiguous: false } },
+    { type: 'fillGeneratedFromPopup', tabId: 1, password: 'G3r@d4!' }, { type: 'clipboardArm', token: 'q2VtLm5leHVzLnRva2VuMQ==' },
+    { type: 'saveNew', title: 'Novo', url: 'https://novo.com.br', login: 'l', password: 'p' }, { type: 'updatePassword', id: '1', password: 'novo' },
+    { type: 'discardPending' }, { type: 'neverForSite', host: 'banco.com.br' }, { type: 'openApp' },
+  ];
+  it.each(popupActions)('$type from the popup counts as activity', async (req) => {
+    addTab({ url: 'https://github.com/login' });
+    getChromeMock().tabs.sendMessage.mockResolvedValue({ ok: true, filled: 1 });
+    const before = await idleSince();
+    await expect(handle(req, popupSender)).resolves.toMatchObject({ ok: true });
+    expect((await loadSession()).lastActivity).toBeGreaterThan(before);
   });
 });
 

@@ -6,7 +6,9 @@
 //   the tab's URL (sender.tab.url, never a URL from the payload) and, inside an iframe, the frame's URL too;
 // - a credential captured on submit (pending.ts) belongs to the tab that captured it: only that tab, on that site, sees
 //   a summary of it (never the password) and can save it — the saved password is the captured one, not the payload's.
-// Auto-lock is enforced at request time as well (not only by the alarm), and reads by pages never extend the session.
+// Auto-lock is enforced at request time as well (not only by the alarm). Reads (getState, matchesForUrl, search,
+// getPending) never extend the session, whoever asks: only the popup's actions (POPUP_ACTIVITY) and a page's validated
+// clicks count as activity, so a popup left open (it polls getState) cannot keep the vault unlocked.
 import { WrongPasswordError } from '@app/crypto/account';
 import { generatePassword } from '@app/generator/password';
 import { generateTotp, parseOtpauth, totpRemainingSeconds } from '@app/crypto/totp';
@@ -66,7 +68,16 @@ function popupOnly(o: Origin): asserts o is ExtensionOrigin {
   if (o.path !== POPUP_PATH) throw new ExtError(INVALID_ORIGIN);
 }
 /**
- * Page-originated actions extend the session only once they passed validation (popup requests are touched up front).
+ * The popup's actions that count as user activity (touched up front, before routing). Everything else from an extension
+ * page — getState (polled every 5 s while the popup is open), matchesForUrl, search, getPending, lock, signOut,
+ * openPopup — never extends the session.
+ */
+const POPUP_ACTIVITY: ReadonlySet<Req['type']> = new Set<Req['type']>([
+  'setServer', 'signIn', 'unlock', 'refresh', 'revealPassword', 'fillFromPopup', 'totpFor', 'generatePassword',
+  'fillGeneratedFromPopup', 'clipboardArm', 'saveNew', 'updatePassword', 'discardPending', 'neverForSite', 'openApp',
+]);
+/**
+ * Page-originated actions extend the session only once they passed validation (popup actions: POPUP_ACTIVITY).
  * savePending and getPending never do: a page can fire synthetic submits and reloads, which must not keep the vault
  * unlocked; only the user's own clicks in the save bar (save, update, dismiss, never) count as activity.
  */
@@ -160,7 +171,7 @@ export async function handle(req: Req, sender: chrome.runtime.MessageSender): Pr
   try {
     // Request-time auto-lock: an idle vault is locked before anything is read, even if the alarm has not fired yet.
     await checkAutoLock();
-    if (origin.kind === 'extension') await touch();
+    if (origin.kind === 'extension' && POPUP_ACTIVITY.has(req.type)) await touch();
     return await route(req, origin);
   } catch (e) {
     return fail(errorMessage(e));
@@ -206,6 +217,7 @@ async function route(req: Req, o: Origin): Promise<Res> {
       await unlock(req.password);
       return ok(await currentState());
     case 'lock':
+      extensionOnly(o);
       await lockSession();
       await clearArmedClipboard(); // a password copied from the popup does not outlive the lock (never throws)
       return ok(await currentState());
