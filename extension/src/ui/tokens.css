@@ -1,23 +1,30 @@
 @import "tailwindcss";
 
-/* Nexus Passwords palette (same values as the web app's light theme). The popup is light only. */
+/*
+ * Nexus Passwords palette: the web app's shipped LIGHT theme (app/globals.css :root), value for value — the popup is
+ * light only. extension/tests/popup-contrast.test.ts keeps the shared tokens equal to the app's and checks every text
+ * pair the popup draws for WCAG AA (>= 4.5:1). Naming differs in one place: the app's sidebar navy is `navy` here and
+ * the app's navy band (#125375, `--color-navy` there) is `navy-light`.
+ */
 @theme {
   --color-primary: #FA681F;
   --color-primary-hover: #E55A12;
   --color-primary-active: #C2410C;
   --color-primary-soft: #FFE4D3;
-  /* Orange text on light surfaces (AA). */
-  --color-primary-text: #B9480F;
-  /* Navy text on solid orange (AA). */
+  /* Orange text on light surfaces: 5.7:1 on white, 4.7:1 on primary-soft. */
+  --color-primary-text: #B0440E;
+  /* Navy text on solid orange: 5.6:1 on #FA681F, 4.6:1 on the hover #E55A12. */
   --color-fg-on-primary: #071E3A;
   --color-navy: #0D2A4D;
+  /* Links and focus rings on light surfaces: 8.3:1 on white. */
   --color-navy-light: #125375;
   --color-surface: #FFFFFF;
-  --color-surface-2: #F3F5F7;
-  --color-border: #E3E8EF;
-  --color-fg: #1D3447;
-  --color-fg-muted: #5B6B7B;
-  --color-success: #15803D;
+  --color-surface-2: #FAFAF9;
+  --color-border: #E7E5E4;
+  --color-fg: #1C1917;
+  /* 4.8:1 on white, 4.6:1 on surface-2. */
+  --color-fg-muted: #78716C;
+  --color-success: #157B3B;
   --color-danger: #B91C1C;
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
