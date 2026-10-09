@@ -12,10 +12,11 @@
  * - a `submit` event only while the frame has a transient user activation: `form.requestSubmit()` from page script
  *   produces a trusted submit event too.
  * A password field a show-password toggle flipped to `type=text` is still read: inputs seen as password fields (focus,
- * input, keys) are remembered in a WeakSet. The password is held only in locals and, for the 2 s duplicate window, in
- * `last`; it is never logged or rendered.
+ * input, keys; forgotten once seen empty as a non-password field, never for one-time-code fields) are remembered in a
+ * WeakSet. The password is held only in locals and, for the 2 s duplicate window, in `last`; it is never logged or
+ * rendered.
  */
-import { detectForms, newPasswordFields, type DetectedForm, type DetectOptions } from '@/shared/forms';
+import { detectForms, looksLikeOtpField, newPasswordFields, type DetectedForm, type DetectOptions } from '@/shared/forms';
 import { send } from '@/shared/messages';
 import { isOverlayHost, isUserEvent } from './host';
 
@@ -122,10 +123,17 @@ export function installCapture(doc: Document, onCaptured?: OnCaptured): () => vo
       .catch(() => undefined);
   };
 
-  /** Any event on a password field (trusted or not: remembering it reads nothing) marks it as one. */
+  /**
+   * Any event on a password field (trusted or not: remembering it reads nothing) marks it as one. It is forgotten when
+   * seen as a non-password field with an empty value (a show-password toggle keeps the value; a page reusing the input
+   * for its next step starts it empty), and an input that looks like a one-time-code field is never remembered.
+   */
   const remember = (e: Event): void => {
     const el = origin(e);
-    if (el && isInput(el) && el.type === 'password') seenPasswords.add(el);
+    if (!el || !isInput(el)) return;
+    if (looksLikeOtpField(el)) seenPasswords.delete(el);
+    else if (el.type === 'password') seenPasswords.add(el);
+    else if (el.value === '') seenPasswords.delete(el);
   };
 
   const onKeyDown = (e: KeyboardEvent): void => {

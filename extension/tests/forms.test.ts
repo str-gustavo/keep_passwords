@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from 'vitest';
-import { currentPasswordField, detectForms, findOtpField, isVisible, newPasswordFields } from '@/shared/forms';
+import { currentPasswordField, detectForms, findOtpField, isVisible, looksLikeOtpField, newPasswordFields } from '@/shared/forms';
 
 const html = (s: string) => { document.body.innerHTML = s; };
 const byId = <T extends HTMLElement = HTMLInputElement>(id: string) => document.getElementById(id) as T;
@@ -172,6 +172,14 @@ describe('detectForms', () => {
     const before = document.body.innerHTML;
     detectForms(document); findOtpField(document);
     expect(document.body.innerHTML).toBe(before);
+  });
+});
+
+describe('looksLikeOtpField', () => {
+  it('autocomplete=one-time-code or an OTP word in name/id/placeholder, not a postal or coupon code', () => {
+    html(`<input id="a" autocomplete="one-time-code"><input id="b" name="mfa_code"><input id="c" placeholder="Código 2FA">
+          <input id="d" name="password"><input id="e" name="promo_code"><input id="f" type="password" name="pin">`);
+    expect(['a', 'b', 'c', 'd', 'e', 'f'].map((id) => looksLikeOtpField(byId(id)))).toEqual([true, true, true, false, false, false]);
   });
 });
 

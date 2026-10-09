@@ -5,7 +5,7 @@ vi.mock('@/shared/messages', () => ({ send: vi.fn() }));
 
 import { send } from '@/shared/messages';
 import { allowSyntheticEvents, shadowOf } from '@/content/host';
-import { ANNOUNCE_DELAY_MS, hideSaveBar, PENDING_RECHECK_MS, SAVED_MS, showSaveBar, startSaveBar, startSaveFlow } from '@/content/save-bar';
+import { ANNOUNCE_DELAY_MS, HOLD_POLL_CAP_MS, HOLD_POLL_MS, hideSaveBar, PENDING_RECHECK_MS, SAVED_MS, showSaveBar, startSaveBar, startSaveFlow } from '@/content/save-bar';
 import { BAR_CSS, PALETTE } from '@/content/styles';
 import { resetChromeMock } from './helpers/chrome-mock';
 
@@ -190,6 +190,66 @@ describe('asking again after a capture (logins that never reload)', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     expect(sent('getPending')).toHaveLength(2);
     expect(barHost()).toBeNull();
+  });
+
+  it('the field let go later (the form removed at 6 s): the poll sends a single getPending then and shows the bar', async () => {
+    await loaded();
+    await submitLogin(SECRET, true);
+    await vi.advanceTimersByTimeAsync(6000);
+    expect(sent('getPending')).toHaveLength(2); // no message while the field holds the password
+    document.querySelector('form')!.remove();
+    await vi.advanceTimersByTimeAsync(HOLD_POLL_MS);
+    await flush();
+    expect(sent('getPending')).toHaveLength(3);
+    expect(barText()).toContain('Salvar no Nexus Passwords?');
+    await vi.advanceTimersByTimeAsync(HOLD_POLL_CAP_MS);
+    expect(sent('getPending')).toHaveLength(3); // a single ask
+    expect(vi.getTimerCount()).toBe(0); // the poll ended with the shown bar
+  });
+
+  it('the password field cleared or hidden also lets go', async () => {
+    await loaded();
+    await submitLogin(SECRET, true);
+    await vi.advanceTimersByTimeAsync(2000);
+    field().value = ''; // a failed login that clears the password
+    await vi.advanceTimersByTimeAsync(HOLD_POLL_MS);
+    await flush();
+    expect(sent('getPending')).toHaveLength(3);
+    hideSaveBar();
+    await submitLogin(`${SECRET}2`, true);
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(sent('getPending')).toHaveLength(3);
+    field().closest('form')!.setAttribute('hidden', '');
+    await vi.advanceTimersByTimeAsync(HOLD_POLL_MS);
+    await flush();
+    expect(sent('getPending')).toHaveLength(4);
+  });
+
+  it('the form still full at 30 s: no bar, and the poll ended', async () => {
+    await loaded();
+    await submitLogin(SECRET, true);
+    await vi.advanceTimersByTimeAsync(HOLD_POLL_CAP_MS);
+    expect(sent('getPending')).toHaveLength(2);
+    expect(barHost()).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);
+    document.querySelector('form')!.remove();
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(sent('getPending')).toHaveLength(2);
+  });
+
+  it('a new capture or stop() ends the poll', async () => {
+    await loaded();
+    await submitLogin(SECRET, true);
+    await vi.advanceTimersByTimeAsync(2000); // polling the first capture's field
+    const first = field();
+    document.body.innerHTML = '<form><input id="u" name="login" value="ana"><input type="password" id="p"></form>';
+    await submitLogin(`${SECRET}2`, true); // a new form and capture: only its field counts now
+    first.remove();
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(sent('getPending')).toHaveLength(2);
+    stop!();
+    stop = null;
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it('dismissed, then another capture: the bar again', async () => {

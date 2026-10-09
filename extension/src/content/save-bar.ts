@@ -20,6 +20,10 @@ import { BAR_CSS } from './styles';
 export const PENDING_RECHECK_MS = 1500;
 /** After a capture in this page (logins that never reload): ask at these delays. */
 export const CAPTURE_RECHECK_MS = [1500, 4000] as const;
+/** While the captured field still holds the password, it is looked at this often (no message is sent meanwhile)… */
+export const HOLD_POLL_MS = 500;
+/** …for at most this long after the capture. */
+export const HOLD_POLL_CAP_MS = 30_000;
 /** How long the green "Salvo!" stays before the bar goes away. */
 export const SAVED_MS = 2000;
 /** The live region gets its text this long after it is mounted (empty), so screen readers announce the change. */
@@ -282,7 +286,8 @@ export interface SaveBarControl {
   stop: () => void;
   /**
    * After a capture in this page: ask again 1.5 s and 4 s later (earlier asks are cancelled), and offer it — in the bar
-   * already up when it is idle. An ask is skipped while `field` still holds the password on screen.
+   * already up when it is idle. While `field` still holds the password on screen no ask is sent: the field is polled
+   * instead (every 500 ms, up to 30 s after the capture) and asked for once when it is cleared, hidden or removed.
    */
   recheck: (field?: HTMLInputElement) => void;
 }
@@ -302,9 +307,39 @@ export function startSaveBar(doc: Document, isTopFrame: () => boolean = () => to
   let generation = 0;
   let watched: HTMLInputElement | null = null;
   let timers: Array<ReturnType<typeof setTimeout>> = [];
+  let poll: ReturnType<typeof setInterval> | undefined;
+  let pollUntil = 0;
+
+  const stopPoll = () => {
+    clearInterval(poll);
+    poll = undefined;
+  };
+  /**
+   * An ask was skipped because `field` still holds the password (a failed login, or a page slow to move on): watch it
+   * without sending anything, and ask once when it lets go. It takes over from the remaining scheduled asks; it ends on
+   * that ask, a shown bar, a new capture, stop() or the cap.
+   */
+  const holdPoll = (field: HTMLInputElement) => {
+    if (poll !== undefined) return;
+    schedule([]);
+    poll = setInterval(() => {
+      if (stopped || offered || Date.now() >= pollUntil) {
+        stopPoll();
+        return;
+      }
+      if (stillHolds(field)) return;
+      stopPoll();
+      watched = null;
+      void check();
+    }, HOLD_POLL_MS);
+  };
 
   const check = async () => {
-    if (stopped || offered || (watched && stillHolds(watched))) return;
+    if (stopped || offered) return;
+    if (watched && stillHolds(watched)) {
+      holdPoll(watched);
+      return;
+    }
     const asked = generation;
     const summary = await askPending();
     if (!summary || stopped || offered || asked !== generation) return;
@@ -327,6 +362,7 @@ export function startSaveBar(doc: Document, isTopFrame: () => boolean = () => to
   return {
     stop: () => {
       stopped = true;
+      stopPoll();
       schedule([]);
       hideSaveBar();
     },
@@ -335,6 +371,8 @@ export function startSaveBar(doc: Document, isTopFrame: () => boolean = () => to
       generation += 1;
       offered = false;
       watched = field ?? null;
+      stopPoll(); // only the newest capture's field counts
+      pollUntil = Date.now() + HOLD_POLL_CAP_MS;
       schedule(CAPTURE_RECHECK_MS);
     },
   };

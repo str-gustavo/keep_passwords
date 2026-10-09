@@ -292,6 +292,40 @@ describe('which password', () => {
     expect(captures()).toHaveLength(0);
   });
 
+  it('a password input reused as the 2FA field (renamed, or emptied as text) does not capture the code', () => {
+    const steps = [
+      (p: HTMLInputElement) => { p.type = 'text'; p.value = ''; p.name = 'otp'; p.setAttribute('autocomplete', 'one-time-code'); },
+      (p: HTMLInputElement) => { p.type = 'text'; p.value = ''; }, // no OTP hint: emptied when it stopped being a password field
+    ];
+    for (const step of steps) {
+      sendMock.mockClear();
+      start(`<form><input id="u" name="login"><input type="password" id="p" name="senha"><button id="go">Entrar</button></form>`);
+      type('u', 'ana');
+      type('p', SECRET);
+      byId('p').dispatchEvent(new Event('input', { bubbles: true, composed: true })); // remembered as a password field
+      enter(byId('p'));
+      expect(captures().map((c) => c.password)).toEqual([SECRET]);
+      step(byId('p')); // the page moves on to its 2FA step in the same input
+      byId('p').dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+      type('p', '123456');
+      byId('p').dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+      enter(byId('p'));
+      byId('go').click();
+      expect(captures().map((c) => c.password)).toEqual([SECRET]);
+      uninstall!();
+      uninstall = null;
+    }
+  });
+
+  it('an input that looks like a one-time-code field is never remembered, even while type=password', () => {
+    start(`<form><input id="u" name="login"><input type="password" id="code" autocomplete="one-time-code"><button id="go">Entrar</button></form>`);
+    byId('code').dispatchEvent(new FocusEvent('focusin', { bubbles: true, composed: true }));
+    byId('code').type = 'text'; // a "show code" toggle
+    type('code', '123456');
+    byId('go').click();
+    expect(captures()).toHaveLength(0);
+  });
+
   it('a submit control of another form does not capture this one', () => {
     start(`${LOGIN}<form><input id="q" name="q"><button id="search">Buscar</button></form>`);
     type('p', SECRET);

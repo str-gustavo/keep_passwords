@@ -177,6 +177,11 @@ export function newPasswordFields(f: DetectedForm): HTMLInputElement[] {
   return [];
 }
 
+/** Whether `el` names itself a one-time-code field: `autocomplete=one-time-code`, or an OTP word (see findOtpField). */
+export function looksLikeOtpField(el: Element): boolean {
+  return autocompleteTokens(el).includes('one-time-code') || hasOtpHint(el);
+}
+
 /** Whether name/id/placeholder name a one-time code (and not a postal / discount code). */
 function hasOtpHint(el: Element): boolean {
   const raw = hints(el, ['name', 'id', 'placeholder']);
