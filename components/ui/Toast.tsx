@@ -35,9 +35,9 @@ export function Toaster() {
   return (
     <div
       ref={ref} popover="manual" data-testid="toast" aria-live="polite"
-      // Resets the UA popover box (centred, bordered, padded, opaque) to the bottom-right stack.
-      style={{ inset: 'auto 1rem 1rem auto' }}
-      className="pointer-events-none fixed z-50 m-0 flex flex-col gap-2 overflow-visible border-0 bg-transparent p-0"
+      // Resets the UA popover box (centred, bordered, padded, opaque) to the bottom-right stack; below lg it sits
+      // above the vault's bottom navigation bar (3.5rem).
+      className="pointer-events-none fixed top-auto right-4 bottom-[4.5rem] left-auto z-50 m-0 flex flex-col gap-2 overflow-visible border-0 bg-transparent p-0 lg:bottom-4"
     >
       {toasts.map((t) => (
         <div key={t.id} role="status" className={`flex items-center gap-2 rounded-lg border border-border border-l-[3px] bg-surface px-4 py-2.5 text-sm text-fg shadow-float ${t.kind === 'error' ? 'border-l-danger' : 'border-l-success'}`}>

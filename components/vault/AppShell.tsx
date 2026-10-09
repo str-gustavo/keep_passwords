@@ -1,7 +1,7 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
-import { usePathname, useRouter } from 'next/navigation';
-import { Menu as MenuIcon, WifiOff } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { WifiOff } from 'lucide-react';
 import { api } from '@/lib/api/client';
 import { useVault } from '@/lib/vault/store';
 import { bootstrapSession } from '@/lib/vault/actions';
@@ -10,20 +10,17 @@ import { useVaultRefresh } from '@/lib/vault/use-vault-refresh';
 import { t } from '@/lib/i18n/pt-br';
 import { Button } from '@/components/ui/Button';
 import { Spinner } from '@/components/ui/Spinner';
-import { Sidebar } from './Sidebar';
 import { LockScreen } from './LockScreen';
+import { Rail } from './Rail';
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const pathname = usePathname();
   const user = useVault((s) => s.user);
   const keys = useVault((s) => s.keys);
   const unlocked = keys !== null;
   const [booted, setBooted] = useState(Boolean(user));
   const [offline, setOffline] = useState(false);
   const [attempt, setAttempt] = useState(0);
-  const [navOpen, setNavOpen] = useState(false);
-  const closeNav = useCallback(() => setNavOpen(false), []);
   useAutoLock();
   useVaultRefresh();
 
@@ -47,9 +44,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [user, router, attempt]);
 
-  // Close the mobile drawer on navigation and whenever the vault locks or unlocks.
-  useEffect(() => { setNavOpen(false); }, [pathname, unlocked]);
-
   if (!booted || !user) {
     if (offline) {
       return (
@@ -66,14 +60,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   if (!unlocked) return <LockScreen />;
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar open={navOpen} onClose={closeNav} />
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-surface px-2 lg:hidden">
-          <button type="button" aria-label={t.openMenu} aria-controls="vault-sidebar" aria-expanded={navOpen} onClick={() => setNavOpen(true)} className="rounded-lg p-2 text-fg outline-none hover:bg-surface-2 focus-visible:ring-2 focus-visible:ring-primary/40">
-            <MenuIcon className="h-5 w-5" aria-hidden="true" />
-          </button>
-          <span className="font-semibold text-fg">{t.appName}</span>
-        </header>
+      {/* Side rail first in the DOM: both variants are always mounted (CSS picks one), so the first match of a nav
+          test id is the side rail's at desktop widths. */}
+      <div className="hidden lg:flex"><Rail variant="side" /></div>
+      <Rail variant="bottom" />
+      <main className="flex min-w-0 flex-1 flex-col pb-14 lg:pb-0">
         {children}
       </main>
     </div>

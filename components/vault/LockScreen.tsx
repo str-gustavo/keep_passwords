@@ -40,12 +40,12 @@ export function LockScreen() {
   }
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="lock-title" className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-surface-2 p-4">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-xl sm:p-8">
+    <div role="dialog" aria-modal="true" aria-labelledby="lock-title" className="fixed inset-0 z-40 flex items-center justify-center overflow-y-auto bg-surface p-4">
+      <div className="w-full max-w-sm">
         <div className="mb-6 flex flex-col items-center gap-3 text-center">
           <NexusLock size={48} />
           <div>
-            <h1 id="lock-title" className="text-lg font-semibold text-fg">{t.locked}</h1>
+            <h1 id="lock-title" className="text-lg font-semibold text-fg-strong">{t.locked}</h1>
             <p className="mt-1 text-sm text-fg-muted">{t.unlockHint}</p>
           </div>
           <p className="max-w-full truncate rounded-full bg-surface-2 px-3 py-1 text-xs text-fg-muted" title={email}>
