@@ -107,6 +107,8 @@ describe('WCAG AA contrast (spec §10, light redesign spec §2)', () => {
       ['fg-on-primary on primary', c('fg-on-primary'), c('primary')],
       ['fg-on-primary on primary-hover', c('fg-on-primary'), c('primary-hover')],
       ['white on primary-active', '#FFFFFF', c('primary-active')],
+      // The keyboard focus ring: `ring-2 ring-primary-text`, offset by `ring-offset-surface` on buttons.
+      ['focus ring: primary-text on surface', c('primary-text'), surface],
       // Orange links, ghost buttons, primary badges, selected rows and hovered menu items.
       ['primary-text on surface', c('primary-text'), surface],
       ['primary-text on surface-2', c('primary-text'), surface2],

@@ -18,7 +18,7 @@ export function IconButton({ label, tone = 'default', variant = 'ghost', size = 
       aria-label={label}
       disabled={disabled || loading}
       className={cn(
-        'inline-flex shrink-0 items-center justify-center rounded-lg text-fg-muted outline-none transition focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50',
+        'inline-flex shrink-0 items-center justify-center rounded-lg text-fg-muted outline-none transition focus-visible:ring-2 focus-visible:ring-primary-text disabled:opacity-50',
         size === 'md' ? 'h-9 w-9' : 'h-8 w-8',
         variant === 'secondary' && 'border border-border bg-surface',
         tone === 'danger' ? 'hover:bg-danger-soft hover:text-danger' : 'hover:bg-surface-2 hover:text-fg',

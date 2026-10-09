@@ -15,7 +15,7 @@ export function TypePicker({ value, onPick }: { value: RecordTypeId | null; onPi
           <button
             key={rt.id} type="button" data-testid={`type-${rt.id}`} aria-pressed={selected} onClick={() => onPick(rt.id)}
             className={cn(
-              'flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40',
+              'flex min-h-11 items-center gap-2.5 rounded-lg border px-3 py-2 text-left text-sm font-medium outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-text',
               selected ? 'border-primary bg-primary-soft text-primary-text' : 'border-border bg-surface text-fg hover:bg-surface-2',
             )}
           >

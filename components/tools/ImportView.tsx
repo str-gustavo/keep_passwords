@@ -100,7 +100,7 @@ export function ImportView() {
           accept=".csv,text/csv"
           disabled={running}
           onChange={onFile}
-          className="block w-full cursor-pointer rounded-lg border border-dashed border-border bg-surface p-3 text-sm text-fg-muted outline-none transition-colors hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50 file:mr-3 file:h-8 file:cursor-pointer file:rounded-lg file:border file:border-solid file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-semibold file:text-fg hover:file:bg-surface-2"
+          className="block w-full cursor-pointer rounded-lg border border-dashed border-border bg-surface p-3 text-sm text-fg-muted outline-none transition-colors hover:border-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary-text disabled:cursor-not-allowed disabled:opacity-50 file:mr-3 file:h-8 file:cursor-pointer file:rounded-lg file:border file:border-solid file:border-border file:bg-surface file:px-3 file:text-[13px] file:font-semibold file:text-fg hover:file:bg-surface-2"
         />
         <p className="mt-2 text-xs text-fg-muted">{t.importFileHint}</p>
         <div className="mt-3 flex flex-wrap items-center gap-2">

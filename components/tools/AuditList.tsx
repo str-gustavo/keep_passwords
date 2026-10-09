@@ -37,7 +37,7 @@ export function AuditList({ id, testId, title, hint, icon: Icon, severity, rows,
                 type="button"
                 data-testid={`audit-item-${r.recordId}`}
                 onClick={() => onOpen(r.recordId)}
-                className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left outline-none transition-colors hover:bg-surface-2 focus-visible:bg-surface-2 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text"
               >
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-border text-fg-muted">
                   <TypeIcon type={r.type} className="h-4 w-4" />

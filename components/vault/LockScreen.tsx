@@ -71,7 +71,7 @@ export function LockScreen() {
           <Button type="submit" data-testid="lock-submit" loading={busy} className="w-full">{t.unlock}</Button>
         </form>
         <div className="mt-4 text-center">
-          <button type="button" onClick={onSignOut} disabled={leaving} className="rounded text-sm font-medium text-fg-muted underline-offset-4 outline-none hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-50">
+          <button type="button" onClick={onSignOut} disabled={leaving} className="rounded text-sm font-medium text-fg-muted underline-offset-4 outline-none hover:text-fg hover:underline focus-visible:ring-2 focus-visible:ring-primary-text disabled:opacity-50">
             {t.signOut}
           </button>
         </div>

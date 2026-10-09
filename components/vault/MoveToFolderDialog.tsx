@@ -59,7 +59,7 @@ export function MoveToFolderDialog({ open, onClose, record }: { open: boolean; o
           onClick={() => { void place(id); }}
           style={depth > 0 ? { paddingLeft: `${0.75 + depth * 1.25}rem` } : undefined}
           className={cn(
-            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-wait',
+            'flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-text disabled:cursor-wait',
             selected ? 'bg-primary-soft font-medium text-primary-text' : 'text-fg hover:bg-surface-2',
           )}
         >

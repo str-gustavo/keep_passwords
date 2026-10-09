@@ -119,7 +119,7 @@ export function AttachmentsEditor({ recordId, attachments, onBusyChange, onDelet
         <label
           htmlFor={INPUT_ID}
           className={cn(
-            'flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors peer-focus-visible:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary/40',
+            'flex cursor-pointer flex-col items-center gap-1 rounded-lg border border-dashed px-4 py-5 text-center transition-colors peer-focus-visible:border-primary peer-focus-visible:ring-2 peer-focus-visible:ring-primary-text',
             dragging ? 'border-primary bg-primary-soft' : 'border-border bg-surface hover:bg-surface-2',
           )}
         >

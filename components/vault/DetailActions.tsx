@@ -2,6 +2,7 @@
 import { useState } from 'react';
 import { Ellipsis, ExternalLink, FolderInput, Pencil, RotateCcw, Share2, Star, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/Button';
+import { buttonClass } from '@/components/ui/buttonClass';
 import { Menu, type MenuItem } from '@/components/ui/Menu';
 import { toast } from '@/components/ui/Toast';
 import { t } from '@/lib/i18n/pt-br';
@@ -15,7 +16,7 @@ import { IconButton } from './IconButton';
 
 const messageOf = (e: unknown) => (e instanceof Error && e.message ? e.message : t.actionFailed);
 // "Abrir site" is a link (new tab), dressed as Button variant="primary" size="sm".
-const openSiteClass = 'inline-flex h-8 items-center justify-center gap-2 rounded-lg bg-primary px-3 text-[13px] font-semibold text-fg-on-primary outline-none transition hover:bg-primary-hover focus-visible:ring-[3px] focus-visible:ring-primary-soft active:bg-primary-active active:text-white';
+const openSiteClass = buttonClass('primary', 'sm');
 
 export interface DetailActionHandlers { onEdit: () => void; onShare: () => void; onMove: () => void; onDeselect: () => void }
 

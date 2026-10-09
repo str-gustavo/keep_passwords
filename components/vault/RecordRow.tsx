@@ -27,7 +27,7 @@ export function RecordRow({ record, selected, shared, onSelect }: { record: Vaul
         aria-current={selected ? 'true' : undefined}
         onClick={() => onSelect(record.id)}
         className={cn(
-          'flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/40',
+          'flex h-12 w-full items-center gap-3 rounded-lg px-3 text-left outline-none transition-colors focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary-text',
           selected ? 'bg-primary-soft' : 'hover:bg-surface-2',
         )}
       >

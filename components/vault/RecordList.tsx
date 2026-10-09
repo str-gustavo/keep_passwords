@@ -23,7 +23,7 @@ export function RecordList({ records, selectedId, onSelect }: { records: VaultRe
           {/* A compact native select: the form Select is 38 px tall and cn() cannot override its height. */}
           <select
             id="record-type-filter" value={type} onChange={(e) => setType(isRecordTypeId(e.target.value) ? e.target.value : 'all')}
-            className="h-7 min-w-0 max-w-44 cursor-pointer rounded-md border border-transparent bg-transparent px-1.5 text-xs font-medium text-fg-muted outline-none transition-colors hover:bg-surface-2 hover:text-fg focus-visible:border-primary focus-visible:ring-[3px] focus-visible:ring-primary-soft"
+            className="h-7 min-w-0 max-w-44 cursor-pointer rounded-md border border-transparent bg-transparent px-1.5 text-xs font-medium text-fg-muted outline-none transition-colors hover:bg-surface-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             <option value="all">{t.allTypes}</option>
             {RECORD_TYPES.map((rt) => <option key={rt.id} value={rt.id}>{rt.label}</option>)}

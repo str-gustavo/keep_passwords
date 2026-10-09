@@ -97,7 +97,7 @@ export function PopoverLink({ href, icon: Icon, label, active, testId, depth = 0
         href={href} data-testid={testId} aria-current={active ? 'page' : undefined} onClick={onNavigate}
         style={depth > 0 ? { paddingLeft: `${0.75 + depth}rem` } : undefined}
         className={cn(
-          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary/40',
+          'flex items-center gap-3 rounded-lg px-3 py-2 text-sm outline-none transition-colors focus-visible:ring-2 focus-visible:ring-primary-text',
           trailing ? 'pr-10' : null,
           active ? 'bg-primary-soft font-medium text-primary-text' : 'text-fg hover:bg-surface-2',
         )}
@@ -122,7 +122,7 @@ export function PopoverSection({ title, action, children }: { title: string; act
         {action && (
           <button
             type="button" data-testid={action.testId} aria-label={action.label} title={action.label} onClick={action.onClick}
-            className="rounded p-1 text-fg-muted outline-none hover:bg-surface-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-primary/40"
+            className="rounded p-1 text-fg-muted outline-none hover:bg-surface-2 hover:text-fg focus-visible:ring-2 focus-visible:ring-primary-text"
           >
             <Plus className="h-4 w-4" aria-hidden="true" />
           </button>
