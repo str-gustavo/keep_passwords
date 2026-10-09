@@ -230,6 +230,7 @@ export class ContentScript {
         label: T.generate,
         detail: T.generateDetail,
         variant: 'primary',
+        sensitive: true,
         run: async () => {
           const password = await generateInto(resolve);
           menu.close(false);
@@ -245,6 +246,7 @@ export class ContentScript {
             label: m.title,
             detail: m.login,
             ariaLabel: T.useUsername(m.login),
+            sensitive: true,
             run: () => {
               fillUsername(resolve(), m.login);
               menu.close(false);
@@ -259,6 +261,7 @@ export class ContentScript {
         label: m.title,
         detail: m.login || T.noLogin,
         ariaLabel: T.fillRecord(m.title, m.login),
+        sensitive: true,
         run: async () => {
           await fillRecord(resolve, m);
           menu.close(false);

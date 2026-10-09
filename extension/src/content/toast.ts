@@ -2,7 +2,7 @@ import { findOtpField } from '@/shared/forms';
 import type { TotpCode } from '@/shared/messages';
 import { fillOtp } from '@/shared/otp';
 import { nexusMark } from './brand';
-import { createOverlay, h, isUserEvent, overlayVisible, removeOverlay } from './host';
+import { createOverlay, engineReportsHidden, h, isUserEvent, overlayVisible, removeOverlay } from './host';
 import { T } from './strings';
 import { TOAST_CSS } from './styles';
 
@@ -45,8 +45,16 @@ function mountCard(doc: Document, title: string, lifetimeMs: number): Card {
   const close = () => { if (current?.host === host) hideToast(); };
   const button = (label: string, variant: 'primary' | 'secondary', run: () => void) => {
     const el = h(doc, 'button', { class: `btn ${variant}`, text: label, attrs: { type: 'button' } });
-    // Copy / fill act only while the card is really visible (same clickjacking rule as the icon and menu).
-    el.addEventListener('click', (e) => { if (isUserEvent(e) && overlayVisible(host)) run(); });
+    // Copy / fill are sensitive: they act only while the card is really visible (same clickjacking rules as the menu).
+    el.addEventListener('click', (e) => {
+      if (!isUserEvent(e) || !overlayVisible(host)) return;
+      if (engineReportsHidden(host)) {
+        status.className = 'status error';
+        status.textContent = T.notConfirmedVisible;
+        return;
+      }
+      run();
+    });
     return el;
   };
   const closeButton = h(doc, 'button', { class: 'close', text: '×', attrs: { type: 'button', 'aria-label': T.close, title: T.close } });

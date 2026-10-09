@@ -21,6 +21,7 @@ export const T = {
   fillRecord: (title: string, login: string) => (login ? `Preencher ${title} (${login})` : `Preencher ${title}`),
   useUsername: (login: string) => `Usar o usuário ${login}`,
   formGone: 'O formulário mudou. Clique no ícone novamente.',
+  notConfirmedVisible: 'Não foi possível confirmar que o menu está visível nesta página. Use o popup do Nexus Passwords.',
   totpTitle: 'Código 2FA',
   expiresIn: (seconds: number) => `Expira em ${seconds} s`,
   copy: 'Copiar',

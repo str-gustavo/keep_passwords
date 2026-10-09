@@ -5,7 +5,7 @@ vi.mock('@/shared/messages', () => ({ send: vi.fn() }));
 
 import { send } from '@/shared/messages';
 import { ContentScript } from '@/content/controller';
-import { allowSyntheticEvents, createOverlay, overlayVisible, removeOverlay, shadowOf } from '@/content/host';
+import { allowSyntheticEvents, createOverlay, engineReportsHidden, overlayVisible, removeOverlay, shadowOf } from '@/content/host';
 import { hideToast, showTotpToast } from '@/content/toast';
 import { ICON_CSS, MENU_CSS, TOAST_CSS } from '@/content/styles';
 import { resetChromeMock } from './helpers/chrome-mock';
@@ -132,42 +132,86 @@ describe('overlayVisible', () => {
   });
 });
 
-// Last: once a document has an IntersectionObserver it keeps it for the rest of this file.
+// Last: once a document has an IntersectionObserver it keeps it for the rest of this file, so the fake's state is
+// module-level and shared by these tests.
+type IOEntry = { target: Element; isVisible?: boolean };
+const observed: Element[] = [];
+const unobserved: Element[] = [];
+let ioOptions: unknown;
+let report: ((entries: IOEntry[]) => void) | null = null;
+class FakeIO {
+  constructor(cb: (entries: IOEntry[]) => void, opts: unknown) { report = cb; ioOptions = opts; }
+  observe(el: Element) { observed.push(el); }
+  unobserve(el: Element) { unobserved.push(el); }
+  disconnect() {}
+}
+const NOT_CONFIRMED = 'Não foi possível confirmar que o menu está visível nesta página. Use o popup do Nexus Passwords.';
+
 describe('IntersectionObserver v2 gate', () => {
-  it('observes each host with trackVisibility and refuses clicks while the engine reports it not visible', async () => {
-    const observed: Element[] = [];
-    const unobserved: Element[] = [];
-    let options: unknown;
-    let report: ((entries: Array<{ target: Element; isVisible?: boolean }>) => void) | null = null;
-    class FakeIO {
-      constructor(cb: (entries: Array<{ target: Element; isVisible?: boolean }>) => void, opts: unknown) { report = cb; options = opts; }
-      observe(el: Element) { observed.push(el); }
-      unobserve(el: Element) { unobserved.push(el); }
-      disconnect() {}
-    }
-    vi.stubGlobal('IntersectionObserver', FakeIO);
+  beforeEach(() => { vi.stubGlobal('IntersectionObserver', FakeIO); });
+
+  it('never blocks opening the menu; refuses a record fill with a message while the menu is reported not visible', async () => {
     start();
     const host = iconHost();
-    expect(options).toEqual({ trackVisibility: true, delay: 100 });
+    expect(ioOptions).toEqual({ trackVisibility: true, delay: 100 });
     expect(observed).toContain(host);
 
-    report!([{ target: host, isVisible: false }]);
-    expect(overlayVisible(host)).toBe(false);
+    report!([{ target: host, isVisible: false }]); // e.g. a site-wide grayscale filter on <html>
+    expect(engineReportsHidden(host)).toBe(true);
+    expect(overlayVisible(host)).toBe(true); // the style checks are unaffected
     iconButton().click();
     await flush();
-    expect(menuHost()).toBeNull();
-    expect(sendMock).not.toHaveBeenCalled();
+    expect(menuHost()).not.toBeNull(); // opening is harmless
+    expect(sent('matchesForUrl')).toHaveLength(1);
 
-    report!([{ target: host }]); // no isVisible (v1 engine): the last v2 verdict stands
-    expect(overlayVisible(host)).toBe(false);
-    report!([{ target: host, isVisible: true }]);
-    expect(overlayVisible(host)).toBe(true);
-    iconButton().click();
+    const menu = menuHost()!;
+    expect(observed).toContain(menu);
+    report!([{ target: menu, isVisible: false }]);
+    menuItems()[0]!.click();
     await flush();
-    expect(menuHost()).not.toBeNull();
+    expect(sent('fillRequest')).toHaveLength(0);
+    expect(byId('p').value).toBe('');
+    expect(shadowOf(menu)!.querySelector('[role="alert"]')?.textContent).toBe(NOT_CONFIRMED);
+
+    report!([{ target: menu }]); // no isVisible (v1 engine): the last v2 verdict stands
+    expect(engineReportsHidden(menu)).toBe(true);
+    report!([{ target: menu, isVisible: true }]);
+    menuItems()[0]!.click();
+    await flush();
+    expect(byId('p').value).toBe(SECRET);
 
     cs!.stop();
     cs = null;
     expect(unobserved).toContain(host);
+  });
+
+  it('non-sensitive entries still work; the toast refuses Copiar / Preencher código with the message', async () => {
+    sendMock.mockImplementation(async (req: Req) => {
+      if (req.type === 'getState') return state('locked') as never;
+      if (req.type === 'openPopup') return { opened: true } as never;
+      throw new Error(`unexpected ${req.type}`);
+    });
+    start();
+    if (!report) throw new Error('observer not created');
+    report([{ target: iconHost(), isVisible: false }]);
+    iconButton().click();
+    await flush();
+    report([{ target: menuHost()!, isVisible: false }]);
+    menuItems()[0]!.click(); // "Desbloquear Nexus Passwords"
+    await flush();
+    expect(sent('openPopup')).toHaveLength(1);
+    expect(menuHost()).toBeNull();
+
+    const writeText = vi.fn(async (_: string) => undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    document.body.insertAdjacentHTML('beforeend', '<input id="otp" autocomplete="one-time-code">');
+    showTotpToast(document, { code: '123456', remaining: 25, refresh: vi.fn() });
+    report([{ target: document.querySelector('nexus-passwords-toast')!, isVisible: false }]);
+    toastButton('Copiar')!.click();
+    toastButton('Preencher código')!.click();
+    await flush();
+    expect(writeText).not.toHaveBeenCalled();
+    expect(byId('otp').value).toBe('');
+    expect(toastRoot().querySelector('[role="status"]')?.textContent).toBe(NOT_CONFIRMED);
   });
 });

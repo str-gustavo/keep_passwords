@@ -1,5 +1,5 @@
 import { nexusMark } from './brand';
-import { createOverlay, h, isUserEvent, overlayVisible, removeOverlay, setHostStyles } from './host';
+import { createOverlay, engineReportsHidden, h, isUserEvent, overlayVisible, removeOverlay, setHostStyles } from './host';
 import { errorText, T } from './strings';
 import { MENU_CSS } from './styles';
 
@@ -9,6 +9,8 @@ export interface MenuEntry {
   /** primary: orange action (generate / unlock); link: opens something; record: a vault record (default). */
   variant?: 'primary' | 'record' | 'link';
   ariaLabel?: string;
+  /** Writes into the page (fill, generate): refused while the engine cannot confirm the menu is visible. */
+  sensitive?: boolean;
   run: () => Promise<void> | void;
 }
 
@@ -156,6 +158,10 @@ export class InlineMenu {
     if (this.busy || this.isClosed) return;
     if (!overlayVisible(this.host)) {
       this.close(false); // the page hid the menu under the pointer: never act on that click
+      return;
+    }
+    if (entry.sensitive && engineReportsHidden(this.host)) {
+      this.render({ message: T.notConfirmedVisible, tone: 'error', entries: this.entries });
       return;
     }
     this.busy = true;

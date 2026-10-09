@@ -127,18 +127,16 @@ const MASK_PROPERTIES = ['mask-image', '-webkit-mask-image'] as const;
 const hasMask = (s: CSSStyleDeclaration) => MASK_PROPERTIES.some((p) => { const v = s.getPropertyValue(p).trim(); return v !== '' && v !== 'none'; });
 
 /**
- * Whether the user can actually see `host`; clicks on an overlay that is not visible are ignored (clickjacking: a page
- * hiding our icon or menu under a decoy and steering the click onto it). `:host` pins the host's own look with
+ * Style checks: whether the page left `host` visible. Clicks on an overlay that fails them are ignored (clickjacking: a
+ * page hiding our icon or menu under a decoy and steering the click onto it). `:host` pins the host's own look with
  * !important (opacity, mask, filter, transforms…), but the page can still act on <html>, its only ancestor. Hidden
  * means any of:
- * - IntersectionObserver v2 (Chrome) last reported `isVisible === false` (occluded, faded, filtered, transformed);
  * - `checkVisibility` with opacity/visibility says hidden;
  * - on the host or an ancestor: effective opacity below 0.5, a `filter` with `opacity(…)`, or a mask image (masks and
  *   filters do not affect hit-testing, so a masked overlay still takes clicks).
- * Other filters on <html> are tolerated by the style checks: sites use them for themes.
+ * Other filters and transforms on <html> are tolerated: sites use them for themes and smooth scrolling.
  */
 export function overlayVisible(host: HTMLElement): boolean {
-  if (engineVisibility.get(host) === false) return false;
   if (typeof host.checkVisibility === 'function' && !host.checkVisibility({ opacityProperty: true, visibilityProperty: true })) return false;
   const win = host.ownerDocument.defaultView;
   if (!win) return false;
@@ -151,6 +149,13 @@ export function overlayVisible(host: HTMLElement): boolean {
   }
   return opacity >= MIN_OPACITY;
 }
+
+/**
+ * Whether Chrome's IntersectionObserver v2 last reported `host` as not visible (occluded, faded, filtered, transformed —
+ * including harmless site-wide filters/transforms on <html>). Gates only the sensitive actions (filling, copying), not
+ * opening or closing; false when the engine has no v2 or has not reported yet.
+ */
+export const engineReportsHidden = (host: HTMLElement): boolean => engineVisibility.get(host) === false;
 
 let syntheticAllowed = false;
 /** Test hook: jsdom cannot produce trusted events. Never called by the shipped script. */
