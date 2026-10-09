@@ -2,9 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { cn } from '@/lib/ui/cn';
 export interface MenuItem { label: string; onSelect: () => void; danger?: boolean; icon?: React.ReactNode; testId?: string }
-/** Where the list opens: below the trigger (default), above it (a bottom bar), or to its right, bottom-aligned (the side rail's footer). */
+/**
+ * Where the list opens: below the trigger (default), above it (a bottom bar), or to its right, bottom-aligned (the
+ * side rail's avatar: 18 px clears the 56 px rail by 8 px, like the rail's panels).
+ */
 export type MenuPlacement = 'bottom' | 'top' | 'right';
-const PLACEMENT: Record<MenuPlacement, string> = { bottom: 'mt-1', top: 'bottom-full mb-1', right: 'bottom-0 left-full ml-2' };
+const PLACEMENT: Record<MenuPlacement, string> = { bottom: 'mt-1', top: 'bottom-full mb-1', right: 'bottom-0 left-full ml-4.5' };
 const TRIGGER_CLASS = 'rounded-lg outline-none focus-visible:ring-2 focus-visible:ring-primary/40';
 
 /** `triggerClassName` replaces the trigger button's default classes (rounding and focus ring). Escape returns focus to the trigger. */
