@@ -15,7 +15,7 @@ const VARIANTS: Record<Variant, string> = {
   ghost: 'text-primary-text underline-offset-2 hover:underline',
   danger: 'border border-border bg-surface text-danger hover:bg-surface-2',
 };
-const SIZES: Record<Size, string> = { sm: 'h-7 px-2 text-xs', md: 'h-[38px] px-3 text-sm' };
+const SIZES: Record<Size, string> = { sm: 'h-7 px-2 text-xs', md: 'h-9 px-3 text-sm' };
 
 export function Button({ variant = 'secondary', size = 'md', className, type = 'button', ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: Size }) {
   return (

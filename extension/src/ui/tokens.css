@@ -1,10 +1,9 @@
 @import "tailwindcss";
 
 /*
- * Nexus Passwords palette: the web app's shipped LIGHT theme (app/globals.css :root), value for value — the popup is
- * light only. extension/tests/popup-contrast.test.ts keeps the shared tokens equal to the app's and checks every text
- * pair the popup draws for WCAG AA (>= 4.5:1). Naming differs in one place: the app's sidebar navy is `navy` here and
- * the app's navy band (#125375, `--color-navy` there) is `navy-light`.
+ * Nexus Passwords palette: the web app's shipped LIGHT theme (app/globals.css :root), value for value and name for
+ * name — the popup is light only. extension/tests/popup-contrast.test.ts keeps these tokens equal to the app's and
+ * checks every text pair the popup draws for WCAG AA (>= 4.5:1).
  */
 @theme {
   --color-primary: #FA681F;
@@ -15,9 +14,6 @@
   --color-primary-text: #B0440E;
   /* Navy text on solid orange: 5.6:1 on #FA681F, 4.6:1 on the hover #E55A12. */
   --color-fg-on-primary: #071E3A;
-  --color-navy: #0D2A4D;
-  /* Links and focus rings on light surfaces: 8.3:1 on white. */
-  --color-navy-light: #125375;
   --color-surface: #FFFFFF;
   --color-surface-2: #F6F8FA;
   --color-border: #E6EAF0;

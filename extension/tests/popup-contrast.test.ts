@@ -40,15 +40,17 @@ describe('popup tokens', () => {
     expect(popup('fg')).toBe('#1E293B');
     expect(popup('fg-muted')).toBe('#61708A');
     expect(popup('primary-soft')).toBe('#FFF1E8');
-    // The popup header is light now: white, navy text, dark-orange accent, orange focus ring.
-    expect(popupOnly('header')).toBe('#FFFFFF');
-    expect(popupOnly('header-fg')).toBe('#0D2A4D');
-    expect(popupOnly('header-accent')).toBe('#B0440E');
+    // The header is drawn with the shared tokens (bg-surface, text-fg-strong); the popup's own palette is the focus ring.
     expect(popupOnly('focus')).toBe('#FA681F');
   });
 
+  it('carry no dead tokens (the old navy header and the app sidebar\'s navy names)', () => {
+    for (const name of ['navy', 'navy-light']) expect(tokensCss).not.toMatch(new RegExp(`--color-${name}:`));
+    for (const name of ['header', 'header-fg', 'header-accent']) expect(popupCss).not.toMatch(new RegExp(`--color-${name}:`));
+  });
+
   it('every text/background pair the popup draws passes AA (>= 4.5:1)', () => {
-    const [surface, surface2, header] = [popup('surface'), popup('surface-2'), popupOnly('header')];
+    const [surface, surface2] = [popup('surface'), popup('surface-2')];
     const pairs: [string, string, string][] = [
       ['fg on surface', popup('fg'), surface],
       ['fg on surface-2', popup('fg'), surface2],
@@ -59,9 +61,8 @@ describe('popup tokens', () => {
       ['fg-on-primary on primary-hover', popup('fg-on-primary'), popup('primary-hover')],
       ['primary-text on surface (active tab)', popup('primary-text'), surface],
       ['primary-text on primary-soft', popup('primary-text'), popup('primary-soft')],
-      ['navy-light on surface (ghost button)', popup('navy-light'), surface],
-      ['header-fg on header', popupOnly('header-fg'), header],
-      ['header-accent on header', popupOnly('header-accent'), header],
+      ['fg-strong on surface (header text)', popup('fg-strong'), surface],
+      ['fg on surface (header Bloquear button)', popup('fg'), surface],
       ['success on success-soft (Desbloqueado pill, notice)', popup('success'), popup('success-soft')],
       ['fg-muted on surface-2 (Bloqueado pill)', popup('fg-muted'), surface2],
       ['danger on danger-soft (notice)', popup('danger'), popup('danger-soft')],
