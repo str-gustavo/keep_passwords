@@ -1,4 +1,4 @@
-import { closeDialog, createLogin, idFromTestId, refreshVault, signUp, unlock } from '../lib/flows.mjs';
+import { closeDialog, closeRailPanel, createLogin, idFromTestId, openFolders, refreshVault, signUp, unlock } from '../lib/flows.mjs';
 
 const FOLDER_URL = /\/cofre\/pasta\/[^/?#]+$/;
 const folderIdOf = (url) => new URL(url).pathname.split('/').pop();
@@ -20,7 +20,8 @@ export default async function run(ctx) {
   signUp(b, ctx, { email: emailB, name: 'Bruno Equipe', password: master });
   b.waitUrl('/cofre');
 
-  // 1. Personal folder "Trabalho": the app opens it after creating it.
+  // 1. Personal folder "Trabalho" (from the rail's "Pastas" panel): the app opens it after creating it.
+  openFolders(a);
   a.click(tid('nav-new-folder'));
   a.waitFor(tid('folder-name'));
   a.fill(tid('folder-name'), 'Trabalho');
@@ -29,7 +30,9 @@ export default async function run(ctx) {
   a.waitUrl(FOLDER_URL);
   const folderId = folderIdOf(a.url());
   a.waitUntil(headingIs('Trabalho'), 15000, 'the "Trabalho" heading');
+  openFolders(a);
   a.waitTextIn(tid(`nav-folder-${folderId}`), 'Trabalho');
+  closeRailPanel(a);
   a.waitFor(tid('record-list-empty'));
 
   // 2. A record created from the folder page lands in the folder.
@@ -54,6 +57,7 @@ export default async function run(ctx) {
   a.waitFor(tid(`record-row-${recordId}`));
 
   // 4. Rename the folder from its header menu.
+  openFolders(a);
   a.click(tid(`nav-folder-${folderId}`));
   a.waitUrl(`/cofre/pasta/${folderId}`);
   a.waitUntil(headingIs('Trabalho'), 15000, 'the folder page');
@@ -67,7 +71,9 @@ export default async function run(ctx) {
   a.waitTextIn(tid('toast'), 'Pasta renomeada');
   a.waitHidden(tid('folder-name'));
   a.waitUntil(headingIs('Trabalho Remoto'), 15000, 'the renamed heading');
+  openFolders(a);
   a.waitTextIn(tid(`nav-folder-${folderId}`), 'Trabalho Remoto');
+  closeRailPanel(a);
   a.screenshot('30-folder-renamed');
 
   // 5. Delete it: back to /cofre, the record is still there.
@@ -78,7 +84,9 @@ export default async function run(ctx) {
   a.click(tid('folder-delete-confirm'));
   a.waitTextIn(tid('toast'), 'Pasta excluída');
   a.waitUrl('/cofre');
+  openFolders(a);
   a.waitHidden(tid(`nav-folder-${folderId}`));
+  closeRailPanel(a);
   a.waitFor(tid(`record-row-${recordId}`));
   a.waitTextIn(tid(`record-row-${recordId}`), 'Intranet');
 
@@ -87,6 +95,7 @@ export default async function run(ctx) {
   // 6. Shared folder "Equipe" with B as "Editor". Toasts stack for 4 s: wait until the first "Pasta criada" is gone so
   // the check below sees the new one.
   a.waitUntil(`!document.querySelector('[data-testid="toast"]').innerText.includes('Pasta criada')`, 6000, 'the first "Pasta criada" toast to expire');
+  openFolders(a);
   a.click(tid('nav-new-shared-folder'));
   a.waitFor(tid('folder-name'));
   a.fill(tid('folder-name'), 'Equipe');
@@ -96,7 +105,9 @@ export default async function run(ctx) {
   const sharedId = folderIdOf(a.url());
   assert.notEqual(sharedId, folderId);
   a.waitUntil(headingIs('Equipe'), 15000, 'the "Equipe" heading');
+  openFolders(a);
   a.waitTextIn(tid(`nav-folder-${sharedId}`), 'Equipe');
+  closeRailPanel(a);
   a.waitText('1 membro');
 
   a.click(tid('folder-menu'));
@@ -134,6 +145,7 @@ export default async function run(ctx) {
   a.waitTextIn(tid('toast'), 'Registro adicionado a “Equipe”');
   a.waitUntil(`document.querySelector('[data-testid="move-shared-${sharedId}"]')?.checked === true`, 15000, 'the shared folder checkbox');
   closeDialog(a);
+  openFolders(a);
   a.click(tid(`nav-folder-${sharedId}`));
   a.waitUrl(`/cofre/pasta/${sharedId}`);
   a.waitFor(tid(`record-row-${recordId}`));
@@ -150,6 +162,7 @@ export default async function run(ctx) {
   // 8. B (reload: the vault is loaded at unlock) sees the folder and the record, and edits it.
   b.reload();
   unlock(b, master);
+  openFolders(b);
   b.waitFor(tid(`nav-folder-${sharedId}`));
   b.waitTextIn(tid(`nav-folder-${sharedId}`), 'Equipe');
   b.click(tid(`nav-folder-${sharedId}`));

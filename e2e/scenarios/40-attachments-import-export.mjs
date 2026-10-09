@@ -1,7 +1,7 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { lastDownload, signUp, stubDownloads, unlock } from '../lib/flows.mjs';
+import { lastDownload, openTools, signUp, stubDownloads, unlock } from '../lib/flows.mjs';
 
 const NO_ERROR_TOAST = `!document.querySelector('[data-testid="toast"] .bg-danger')`;
 
@@ -94,6 +94,7 @@ export default async function run(ctx) {
   const csvPath = path.join(dir, 'chrome-passwords.csv');
   writeFileSync(csvPath, ['name,url,username,password,note', ...rows.map((r) => `${r.name},${r.url},${r.username},${r.password},`)].join('\n') + '\n');
 
+  openTools(b);
   b.click(tid('nav-import'));
   b.waitUrl('/cofre/importar');
   b.waitFor(tid('import-file'));
@@ -112,6 +113,7 @@ export default async function run(ctx) {
   assert.equal(b.count('[data-testid^="record-row-"]'), 4);
 
   // 7. Export CSV: the buttons unlock only after the confirmation; the file holds every record.
+  openTools(b);
   b.click(tid('nav-export'));
   b.waitUrl('/cofre/exportar');
   b.waitFor(tid('export-confirm'));

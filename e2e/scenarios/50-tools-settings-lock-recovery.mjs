@@ -1,4 +1,4 @@
-import { createLogin, signIn, signOut, signUp } from '../lib/flows.mjs';
+import { createLogin, openTools, signIn, signOut, signUp } from '../lib/flows.mjs';
 
 const phraseOf = (text) => text.replace(/\d+\./g, ' ').split(/\s+/).filter(Boolean).join(' ');
 
@@ -42,6 +42,7 @@ export default async function run(ctx) {
   b.screenshot('50-audit');
 
   // 2. Generator: 20 characters by default, 32 after changing the length; copy shows a toast.
+  openTools(b);
   b.click(tid('nav-generator'));
   b.waitUrl('/cofre/gerador');
   b.waitTextIn(tid('gen-output'), /^\S{20}$/);

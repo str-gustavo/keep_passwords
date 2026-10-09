@@ -47,6 +47,25 @@ export function signOut(b) {
   b.waitFor(tid('auth-email'));
 }
 
+// The rail's "Pastas" and "Ferramentas" icons open white panels holding the folder links / "Nova pasta" and the
+// generator / import / export links. Opening is idempotent (a second click on the icon would close the panel). A link
+// in a panel closes it as it navigates; after only reading a panel, close it with `closeRailPanel` so it does not
+// cover the record list for the next click.
+function openRailPanel(b, trigger, content) {
+  b.waitFor(tid(trigger));
+  if (b.evalJs(`document.querySelector(${JSON.stringify(tid(trigger))}).getAttribute('aria-expanded')`) !== 'true') b.click(tid(trigger));
+  b.waitFor(tid(content));
+}
+export const openFolders = (b) => openRailPanel(b, 'nav-folders', 'nav-new-folder');
+export const openTools = (b) => openRailPanel(b, 'nav-tools', 'nav-generator');
+
+// Closes the open rail panel with Escape (the panel listens on the document; native <dialog>s are another matter,
+// see `closeDialog`).
+export function closeRailPanel(b) {
+  b.press('Escape');
+  b.waitUntil(`!document.querySelector('[aria-haspopup="dialog"][aria-expanded="true"]')`, 15000, 'the rail panel to close');
+}
+
 // Unlocks the lock screen (shown after a reload or the auto-lock: keys only live in memory).
 export function unlock(b, password) {
   b.waitFor(tid('lock-password'), 30000);
