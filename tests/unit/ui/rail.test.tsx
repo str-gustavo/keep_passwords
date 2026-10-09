@@ -20,10 +20,15 @@ vi.mock('@/lib/vault/store', async (orig) => {
   return { ...m, useVault };
 });
 
+import { Folder } from 'lucide-react';
 import { Rail } from '@/components/vault/Rail';
+import { RailPopover } from '@/components/vault/RailPopover';
+
+const rect = (top: number, height: number) => ({ top, bottom: top + height, height, left: 0, right: 0, width: 0, x: 0, y: top, toJSON: () => ({}) }) as DOMRect;
+function setInnerHeight(px: number) { Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: px }); }
 
 beforeEach(() => { nav.pathname = '/cofre'; });
-afterEach(() => { cleanup(); vi.clearAllMocks(); });
+afterEach(() => { cleanup(); vi.clearAllMocks(); vi.restoreAllMocks(); });
 
 describe('Rail', () => {
   it('mostra todos os destinos com rótulo acessível e tooltip', () => {
@@ -118,6 +123,54 @@ describe('Rail', () => {
     for (const id of ['account-settings', 'account-theme', 'account-lock', 'account-sign-out']) expect(screen.getByTestId(id)).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('account-lock'));
     expect(vault.lock).toHaveBeenCalledOnce();
+  });
+
+  it('o menu de uma pasta perto do fim do painel abre para cima; perto do topo, para baixo', () => {
+    render(<Rail variant="side" />);
+    fireEvent.click(screen.getByTestId('nav-folders'));
+    const panel = screen.getByRole('dialog', { name: 'Pastas' });
+    const [top, bottom] = [screen.getByTestId('nav-folder-menu-f1'), screen.getByTestId('nav-folder-menu-s1')];
+    // A 400 px panel; the first folder's trigger 40 px from its top, the last one 40 px from its end; a 160 px menu.
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this === panel) return rect(0, 400);
+      if (this === top) return rect(40, 28);
+      if (this === bottom) return rect(332, 28);
+      return this.getAttribute('role') === 'menu' ? rect(0, 160) : rect(0, 0);
+    });
+    fireEvent.click(bottom);
+    expect(screen.getByRole('menu').className).toMatch(/(^|\s)bottom-full(\s|$)/);
+    fireEvent.click(bottom);
+    fireEvent.click(top);
+    expect(screen.getByRole('menu').className).not.toMatch(/(^|\s)bottom-full(\s|$)/);
+    expect(screen.getByRole('menu').className).toMatch(/(^|\s)mt-1(\s|$)/);
+  });
+
+  it('o painel lateral recalcula a altura máxima quando a janela muda de tamanho', () => {
+    const initial = window.innerHeight;
+    try {
+      setInnerHeight(800);
+      render(<Rail variant="side" />);
+      const trigger = screen.getByTestId('nav-folders');
+      vi.spyOn(trigger, 'getBoundingClientRect').mockReturnValue(rect(100, 40));
+      fireEvent.click(trigger);
+      const panel = screen.getByRole('dialog', { name: 'Pastas' });
+      expect(panel.style.maxHeight).toBe('688px');
+      setInnerHeight(600);
+      fireEvent(window, new Event('resize'));
+      expect(panel.style.maxHeight).toBe('488px');
+    } finally { setInnerHeight(initial); }
+  });
+
+  it('o painel fecha quando a variante muda', () => {
+    const pop = (variant: 'side' | 'bottom') => (
+      <RailPopover variant={variant} icon={Folder} label="Teste" testId="pop" active={false}>{() => <button type="button">item</button>}</RailPopover>
+    );
+    const { rerender } = render(pop('side'));
+    fireEvent.click(screen.getByTestId('pop'));
+    expect(screen.getByRole('dialog', { name: 'Teste' })).toBeInTheDocument();
+    rerender(pop('bottom'));
+    expect(screen.queryByRole('dialog', { name: 'Teste' })).toBeNull();
+    expect(screen.getByTestId('pop')).toHaveAttribute('aria-expanded', 'false');
   });
 
   it('a variante inferior lista os mesmos destinos', () => {

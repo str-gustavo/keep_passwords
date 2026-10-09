@@ -32,12 +32,24 @@ export function RailPopover({ variant, icon: Icon, label, testId, active, panelC
 
   const [shownPath, setShownPath] = useState(pathname);
   if (pathname !== shownPath) { setShownPath(pathname); setOpen(false); }
+  const [shownVariant, setShownVariant] = useState(variant);
+  if (variant !== shownVariant) { setShownVariant(variant); setOpen(false); }
+
+  // Beside the side rail the panel starts level with its icon: it may grow down to 12 px above the viewport's end.
+  const measure = useCallback(() => {
+    if (variant === 'side' && trigger.current) setMaxHeight(window.innerHeight - trigger.current.getBoundingClientRect().top - 12);
+  }, [variant]);
 
   function toggle() {
-    // Beside the side rail the panel starts level with its icon: it may grow down to 12 px above the viewport's end.
-    if (!open && variant === 'side' && trigger.current) setMaxHeight(window.innerHeight - trigger.current.getBoundingClientRect().top - 12);
+    if (!open) measure();
     setOpen((o) => !o);
   }
+
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [open, measure]);
 
   useEffect(() => {
     if (!open) return;
@@ -73,7 +85,7 @@ export function RailPopover({ variant, icon: Icon, label, testId, active, panelC
       </button>
       {open && (
         <div
-          ref={panel} id={panelId} role="dialog" aria-label={label}
+          ref={panel} id={panelId} role="dialog" aria-label={label} data-menu-boundary
           style={variant === 'side' ? { maxHeight } : undefined}
           className={cn(
             'z-40 overflow-y-auto overscroll-contain rounded-xl border border-border bg-surface p-2 text-left text-fg shadow-float',
