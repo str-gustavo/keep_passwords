@@ -8,7 +8,9 @@
  *   synchronously or after `return true`. A returned Promise is NOT treated as the answer (the caller
  *   gets `undefined`), exactly as in the minimum Chrome version the manifest targets.
  * Simplified: `tabs.query({ url })` and `permissions.contains` compare strings exactly (no match
- * patterns); every API is promise-only (no callbacks); one window (id 1) is the current window.
+ * patterns); every API is promise-only (no callbacks); one window (id 1) is the current window;
+ * `offscreen` only tracks whether its single document is open (creating a second one or closing
+ * none rejects, like Chrome) and loads nothing: tests play the document's answer themselves.
  *
  * Every API function is a `vi.fn`, so tests can assert calls or override behaviour
  * (`chrome.tabs.sendMessage.mockResolvedValue(...)` via `getChromeMock()`). `resetChromeMock()` clears
@@ -182,6 +184,9 @@ function createChromeMock() {
     return tab;
   };
 
+  // ---- offscreen (at most one document per extension) ----
+  let offscreenOpen = false;
+
   // ---- permissions ----
   const grantedOrigins = new Set<string>();
   const grantedPermissions = new Set<string>(manifest.permissions);
@@ -262,6 +267,16 @@ function createChromeMock() {
         return true;
       }),
     },
+    offscreen: {
+      createDocument: fn(async (_parameters: chrome.offscreen.CreateParameters): Promise<void> => {
+        if (offscreenOpen) throw new Error('Only a single offscreen document may be created.');
+        offscreenOpen = true;
+      }),
+      closeDocument: fn(async (): Promise<void> => {
+        if (!offscreenOpen) throw new Error('No current offscreen document.');
+        offscreenOpen = false;
+      }),
+    },
     scripting: {
       executeScript: fn(async (_injection: unknown): Promise<unknown[]> => []),
       insertCSS: fn(async (_injection: unknown): Promise<void> => undefined),
@@ -277,6 +292,8 @@ function createChromeMock() {
     /** Delivers `message` to runtime.onMessage as if sent from another context (e.g. a content script with `sender.tab`). */
     sendMessageFrom: (sender: chrome.runtime.MessageSender, message: unknown) => deliver(message, { id: MOCK_EXTENSION_ID, ...sender }),
     /** Fires onAlarm for `name` (a created alarm, or a synthetic one) and awaits the listeners; one-shot alarms are removed. */
+    /** Whether the offscreen document is open (created and not closed yet). */
+    offscreenOpen: () => offscreenOpen,
     fireAlarm: async (name: string): Promise<void> => {
       const alarm = alarms.get(name) ?? ({ name, scheduledTime: Date.now(), persistAcrossSessions: false } as chrome.alarms.Alarm);
       if (alarm.periodInMinutes === undefined) alarms.delete(name);
@@ -289,6 +306,7 @@ function createChromeMock() {
       alarms.clear();
       tabs.length = 0;
       nextTabId = 1;
+      offscreenOpen = false;
       grantedOrigins.clear();
       grantedPermissions.clear();
       for (const p of manifest.permissions) grantedPermissions.add(p);
@@ -329,3 +347,4 @@ export const addTab = (partial?: Partial<chrome.tabs.Tab>): chrome.tabs.Tab => i
 export const sendMessageFrom = (sender: chrome.runtime.MessageSender, message: unknown): Promise<unknown> =>
   installed().helpers.sendMessageFrom(sender, message);
 export const fireAlarm = (name: string): Promise<void> => installed().helpers.fireAlarm(name);
+export const offscreenOpen = (): boolean => installed().helpers.offscreenOpen();

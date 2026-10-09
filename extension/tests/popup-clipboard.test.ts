@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { CLIPBOARD_CLEAR_MS, copyWithAutoClear } from '@/popup/lib/clipboard';
+import { getChromeMock, resetChromeMock } from './helpers/chrome-mock';
 
 let board = '';
 const clip = {
@@ -10,6 +11,8 @@ let readState: PermissionState | 'missing' = 'granted';
 
 beforeEach(() => {
   vi.useFakeTimers();
+  resetChromeMock();
+  getChromeMock().runtime.sendMessage.mockResolvedValue({ ok: true, data: null });
   board = '';
   readState = 'granted';
   clip.writeText.mockClear();
@@ -86,5 +89,33 @@ describe('copyWithAutoClear', () => {
   it('propagates a failed copy so the UI can say so', async () => {
     clip.writeText.mockRejectedValueOnce(new Error('denied'));
     await expect(copyWithAutoClear('w')).rejects.toThrow('denied');
+  });
+});
+
+describe('the service worker backup clear (survives the popup closing)', () => {
+  const armCalls = () => getChromeMock().runtime.sendMessage.mock.calls.map(([m]) => m as { type: string; token: string });
+
+  it('after each copy, arms it with a fresh random token — never with the copied text', async () => {
+    await copyWithAutoClear('s3cr3t');
+    await copyWithAutoClear('s3cr3t');
+    const calls = armCalls();
+    expect(calls).toHaveLength(2);
+    for (const m of calls) expect(m).toEqual({ type: 'clipboardArm', token: expect.stringMatching(/^[A-Za-z0-9+/]{22}==$/) });
+    expect(calls[0]!.token).not.toBe(calls[1]!.token);
+    expect(JSON.stringify(calls)).not.toContain('s3cr3t');
+  });
+
+  it('arms only after the copy succeeded', async () => {
+    clip.writeText.mockRejectedValueOnce(new Error('denied'));
+    await expect(copyWithAutoClear('w')).rejects.toThrow('denied');
+    expect(armCalls()).toEqual([]);
+  });
+
+  it('a failed arm does not fail the copy, and the in-popup clear still runs', async () => {
+    getChromeMock().runtime.sendMessage.mockRejectedValue(new Error('Could not establish connection. Receiving end does not exist.'));
+    await expect(copyWithAutoClear('x')).resolves.toBeUndefined();
+    expect(board).toBe('x');
+    await vi.advanceTimersByTimeAsync(CLIPBOARD_CLEAR_MS);
+    expect(board).toBe('');
   });
 });

@@ -179,7 +179,8 @@ describe('popup-only messages', () => {
   const popupOnly: Req[] = [
     { type: 'setServer', url: 'https://cofre.example.com' }, { type: 'signIn', email: 'a@b.c', password: 'x' }, { type: 'unlock', password: 'x' },
     { type: 'signOut' }, { type: 'refresh' }, { type: 'search', query: '' }, { type: 'fillFromPopup', id: '1', tabId: 7 },
-    { type: 'revealPassword', id: '1' },
+    { type: 'revealPassword', id: '1' }, { type: 'clipboardArm', token: 'q2VtLm5leHVzLnRva2VuMQ==' },
+    { type: 'fillGeneratedFromPopup', tabId: 7, password: 'G3r@d4!' },
   ];
   it.each(popupOnly)('$type is refused from a content script', async (req) => {
     await unlocked();
@@ -239,6 +240,48 @@ describe('fillFromPopup', () => {
     const tab = addTab({ url: 'https://github.com/login' });
     getChromeMock().tabs.sendMessage.mockRejectedValueOnce(new Error('Could not establish connection. Receiving end does not exist.'));
     await expect(handle({ type: 'fillFromPopup', id: '1', tabId: tab.id! }, popupSender)).resolves.toEqual({ ok: false, error: 'Não foi possível preencher nesta página' });
+  });
+});
+
+describe('fillGeneratedFromPopup', () => {
+  const GENERATED = 'G3r@d4-n0-p0pup!xyz';
+  it('sends the generated password to the top frame of a web tab and reports how many fields were filled', async () => {
+    const tab = addTab({ url: 'https://site.com.br/cadastro' });
+    getChromeMock().tabs.sendMessage.mockResolvedValue({ ok: true, filled: 2 });
+    await expect(handle({ type: 'fillGeneratedFromPopup', tabId: tab.id!, password: GENERATED }, popupSender)).resolves.toEqual({ ok: true, data: { filled: 2 } });
+    expect(getChromeMock().tabs.sendMessage).toHaveBeenCalledWith(tab.id, { type: 'fillGenerated', password: GENERATED }, { frameId: 0 });
+    // Not a stored secret, and never stored either.
+    const writes = JSON.stringify([getChromeMock().storage.session.set.mock.calls, getChromeMock().storage.local.set.mock.calls]);
+    expect(writes).not.toContain(GENERATED);
+  });
+  it('is refused for other extension pages (popup.html only)', async () => {
+    const tab = addTab({ url: 'https://site.com.br/' });
+    const options = { ...popupSender, url: `${popupSender.url!.replace('/popup.html', '/offscreen.html')}` };
+    await expect(handle({ type: 'fillGeneratedFromPopup', tabId: tab.id!, password: GENERATED }, options)).resolves.toEqual(INVALID);
+    expect(getChromeMock().tabs.sendMessage).not.toHaveBeenCalled();
+  });
+  it('refuses a tab that is not an http(s) page, and an unknown tab', async () => {
+    for (const url of ['chrome://extensions', 'file:///etc/passwd', 'chrome-extension://abc/popup.html', undefined]) {
+      const tab = addTab(url === undefined ? {} : { url });
+      await expect(handle({ type: 'fillGeneratedFromPopup', tabId: tab.id!, password: GENERATED }, popupSender)).resolves.toEqual({ ok: false, error: 'Não é possível preencher nesta página' });
+    }
+    await expect(handle({ type: 'fillGeneratedFromPopup', tabId: 999, password: GENERATED }, popupSender)).resolves.toEqual({ ok: false, error: 'Aba não encontrada' });
+    expect(getChromeMock().tabs.sendMessage).not.toHaveBeenCalled();
+  });
+  it('reports a page without the content script, a page without password fields and an odd answer', async () => {
+    const tab = addTab({ url: 'https://site.com.br/' });
+    const req: Req = { type: 'fillGeneratedFromPopup', tabId: tab.id!, password: GENERATED };
+    getChromeMock().tabs.sendMessage.mockRejectedValueOnce(new Error('Could not establish connection. Receiving end does not exist.'));
+    await expect(handle(req, popupSender)).resolves.toEqual({ ok: false, error: 'Não foi possível preencher nesta página' });
+    getChromeMock().tabs.sendMessage.mockResolvedValueOnce({ ok: false, filled: 0 });
+    await expect(handle(req, popupSender)).resolves.toEqual({ ok: false, error: 'Nenhum campo de senha encontrado nesta página' });
+    getChromeMock().tabs.sendMessage.mockResolvedValueOnce(undefined);
+    await expect(handle(req, popupSender)).resolves.toEqual({ ok: false, error: 'Não foi possível preencher nesta página' });
+  });
+  it('validates the payload', async () => {
+    for (const bad of [{ tabId: 1, password: '' }, { tabId: 1, password: 'x'.repeat(4097) }, { tabId: 1.5, password: 'x' }, { tabId: '1', password: 'x' }, { tabId: 1 }]) {
+      await expect(handle({ type: 'fillGeneratedFromPopup', ...bad } as unknown as Req, popupSender)).resolves.toEqual({ ok: false, error: 'Mensagem inválida' });
+    }
   });
 });
 

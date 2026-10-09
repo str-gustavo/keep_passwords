@@ -1,4 +1,5 @@
-// Popup (React + Tailwind) and service worker (ES module, "type": "module" in the manifest).
+// Popup (React + Tailwind), offscreen document (clipboard clear) and service worker (ES module, "type": "module" in
+// the manifest).
 // The content script is a separate IIFE build: vite.content.config.ts.
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
@@ -20,7 +21,7 @@ export default defineConfig({
     // Chrome 116+ supports modulepreload natively; the polyfill would only add DOM code to the bundle.
     modulePreload: { polyfill: false },
     rollupOptions: {
-      input: { popup: 'popup.html', sw: 'src/sw/index.ts' },
+      input: { popup: 'popup.html', offscreen: 'offscreen.html', sw: 'src/sw/index.ts' },
       output: {
         format: 'es',
         entryFileNames: (chunk) => (chunk.name === 'sw' ? 'sw.js' : 'assets/[name].js'),

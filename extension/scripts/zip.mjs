@@ -11,7 +11,7 @@ const root = fileURLToPath(new URL('..', import.meta.url));
 const dist = join(root, 'dist');
 const release = join(root, 'release');
 
-const required = ['manifest.json', 'sw.js', 'content.js', 'popup.html'];
+const required = ['manifest.json', 'sw.js', 'content.js', 'popup.html', 'offscreen.html'];
 const missing = required.filter((f) => !existsSync(join(dist, f)));
 if (missing.length > 0) {
   console.error(`dist/ is incomplete (missing ${missing.join(', ')}); run \`npm run ext:build\` first.`);

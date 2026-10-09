@@ -41,6 +41,7 @@ function unlockedSW(extra: Handlers = {}) {
     revealPassword: () => ({ password: SECRET }),
     fillFromPopup: () => null,
     openApp: () => null,
+    clipboardArm: () => null,
     ...extra,
   });
 }
@@ -313,6 +314,49 @@ describe('"Gerador"', () => {
 
     await user.click(screen.getByRole('button', { name: 'Copiar' }));
     await waitFor(() => expect(board).toEqual([screen.getByTestId('gen-output').textContent]));
+    // The service worker is asked to clear it in 30 s even if the popup closes; it never sees the password.
+    await waitFor(() => expect(sent(sendMock, 'clipboardArm')).toHaveLength(1));
+    expect(JSON.stringify(sent(sendMock, 'clipboardArm'))).not.toContain(board[0]);
+  });
+
+  it('"Usar nesta página" sends the shown password to the active tab and says "Preenchido"', async () => {
+    addTab({ url: 'https://example.org', active: false });
+    const tab = addTab({ url: 'https://site.com.br/cadastro' });
+    unlockedSW({ fillGeneratedFromPopup: () => ({ filled: 2 }) });
+    const close = vi.spyOn(window, 'close').mockImplementation(() => undefined);
+    const user = setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Gerador' }));
+    const shown = screen.getByTestId('gen-output').textContent;
+    await user.click(await screen.findByRole('button', { name: 'Usar nesta página' }));
+
+    expect(await screen.findByText('Preenchido')).toBeTruthy();
+    expect(sent(sendMock, 'fillGeneratedFromPopup')).toEqual([{ type: 'fillGeneratedFromPopup', tabId: tab.id, password: shown }]);
+    expect(close).not.toHaveBeenCalled(); // the password stays on screen to copy
+  });
+
+  it('"Usar nesta página" shows the service worker error', async () => {
+    addTab({ url: 'https://site.com.br/' });
+    unlockedSW({ fillGeneratedFromPopup: () => { throw new Error('Nenhum campo de senha encontrado nesta página'); } });
+    const user = setup();
+    render(<App />);
+
+    await user.click(await screen.findByRole('tab', { name: 'Gerador' }));
+    await user.click(await screen.findByRole('button', { name: 'Usar nesta página' }));
+    expect((await screen.findByRole('alert')).textContent).toContain('Nenhum campo de senha encontrado nesta página');
+  });
+
+  it('hides "Usar nesta página" when the active tab is not a web page', async () => {
+    addTab({ url: 'chrome://extensions' });
+    unlockedSW();
+    const user = setup();
+    render(<App />);
+
+    await screen.findByText('Abra um site para ver os registros salvos para ele.'); // the active tab is known
+    await user.click(screen.getByRole('tab', { name: 'Gerador' }));
+    expect(screen.getByRole('button', { name: 'Copiar' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Usar nesta página' })).toBeNull();
   });
 
   it('keeps at least one character class on', async () => {

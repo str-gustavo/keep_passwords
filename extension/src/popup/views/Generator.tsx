@@ -1,14 +1,17 @@
 import { useState } from 'react';
 import { generatePassword } from '@app/generator/password';
 import { t } from '@app/i18n/pt-br';
-import type { GenOptions } from '@/shared/messages';
+import { send, type FillGeneratedResult, type GenOptions } from '@/shared/messages';
 import { copyWithAutoClear } from '../lib/clipboard';
+import { errorText } from '../lib/errors';
+import type { ActiveTab } from '../lib/tab';
 import { Button, cx, focusRing, inputClass } from '../ui/controls';
 import { NoticeBar, useNotice } from '../ui/notice';
 
 // Same password options as the web app's generator (GenOptions). Generated locally with the app's generator
-// (crypto.getRandomValues), so no round trip and no secret ever crosses a message. The generated value is shown —
-// it is not stored anywhere until the user pastes it.
+// (crypto.getRandomValues), so no round trip. The generated value is shown — it is not stored anywhere until the user
+// pastes it, or sends it to the active web page with "Usar nesta página" (fillGeneratedFromPopup: the service worker
+// relays it to that tab's top frame, which fills the sign-up or password-change form's new-password fields).
 const LENGTH_MIN = 8;
 const LENGTH_MAX = 64;
 const DEFAULTS: GenOptions = { length: 20, upper: true, lower: true, digits: true, symbols: true, excludeAmbiguous: false };
@@ -22,11 +25,14 @@ const CLASSES: { key: CharClass; label: string }[] = [
 const clamp = (n: number) => Math.min(LENGTH_MAX, Math.max(LENGTH_MIN, Math.round(n)));
 const checkbox = cx('h-4 w-4 shrink-0 cursor-pointer accent-primary disabled:cursor-not-allowed', focusRing);
 
-export function Generator() {
+/** `tab`: the active tab ("Usar nesta página" only when it is a web page). */
+export function Generator({ tab = null }: { tab?: ActiveTab | null | undefined }) {
   const [opts, setOpts] = useState<GenOptions>(DEFAULTS);
   const [lengthText, setLengthText] = useState(String(DEFAULTS.length));
   const [output, setOutput] = useState(() => generatePassword(DEFAULTS));
+  const [filling, setFilling] = useState(false);
   const [notice, notify] = useNotice();
+  const pageTabId = tab?.host ? tab.id : null;
 
   const update = (patch: Partial<GenOptions>) => {
     const next = { ...opts, ...patch };
@@ -56,14 +62,29 @@ export function Generator() {
     }
   }
 
+  async function useOnPage() {
+    if (pageTabId === null || filling) return;
+    setFilling(true);
+    notify(null);
+    try {
+      await send<FillGeneratedResult>({ type: 'fillGeneratedFromPopup', tabId: pageTabId, password: output });
+      notify({ kind: 'success', text: 'Preenchido' });
+    } catch (e) {
+      notify({ kind: 'error', text: errorText(e) });
+    } finally {
+      setFilling(false);
+    }
+  }
+
   return (
     <div>
       <div className="space-y-4 p-4">
         <section aria-labelledby="gen-output-title" className="rounded-lg border border-border bg-surface-2 p-3">
           <h2 id="gen-output-title" className="text-xs font-medium text-fg-muted">{t.genGenerated}</h2>
           <p data-testid="gen-output" className="mt-1 min-h-6 font-mono text-base break-all text-fg select-all">{output}</p>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-3 flex flex-wrap gap-2">
             <Button variant="primary" size="sm" onClick={copy}>{t.copy}</Button>
+            {pageTabId !== null && <Button size="sm" disabled={filling} onClick={useOnPage}>Usar nesta página</Button>}
             <Button size="sm" onClick={() => setOutput(generatePassword(opts))}>{t.genRegenerate}</Button>
           </div>
         </section>

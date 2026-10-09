@@ -16,6 +16,12 @@ export const EMAIL_KEY = 'lastEmail';
 export const SERVER_KEY = 'serverUrl';
 /** chrome.alarms name of the once-a-minute idle check. */
 export const AUTOLOCK_ALARM = 'autolock';
+/** A copy made from the popup is cleared from the clipboard after this long (same policy as the web app). */
+export const CLIPBOARD_CLEAR_MS = 30_000;
+/** chrome.alarms name of the one-shot clipboard clear, CLIPBOARD_CLEAR_MS after the popup's last copy. */
+export const CLIPBOARD_ALARM = 'clipboard-clear';
+/** chrome.storage.session key of the armed clipboard clear: `{ token, at }` only, never what was copied. */
+export const CLIPBOARD_KEY = 'nexus.clipboard';
 /** Auto-lock minutes when the account has no valid setting (same default as the web app). */
 export const DEFAULT_LOCK_MINUTES = 10;
 /** Upper bound the server accepts for lockMinutes; anything above it is clamped. */

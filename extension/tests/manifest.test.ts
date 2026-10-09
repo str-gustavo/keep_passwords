@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import offscreenHtml from '../offscreen.html?raw';
 import manifest from '../manifest.json';
 import keyFile from '../key.json';
 import extensionPackage from '../package.json';
@@ -13,6 +14,11 @@ describe('manifest.json', () => {
     expect(manifest.content_scripts).toEqual([expect.objectContaining({ js: ['content.js'], matches: ['<all_urls>'] })]);
     // Web Store limit for the description.
     expect(manifest.description.length).toBeLessThanOrEqual(132);
+  });
+
+  it('can clear the clipboard after a copy from an offscreen document, even with the popup closed', () => {
+    expect(manifest.permissions).toEqual(expect.arrayContaining(['offscreen', 'clipboardWrite']));
+    expect(offscreenHtml).toContain('src="/src/offscreen/main.ts"');
   });
 
   it('keeps dev-only fields out of the source manifest', () => {

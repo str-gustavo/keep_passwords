@@ -1,7 +1,8 @@
-// Typed messages between the extension contexts (popup, content scripts) and the service worker.
+// Typed messages between the extension contexts (popup, content scripts, offscreen document) and the service worker.
 // Every request goes through chrome.runtime.sendMessage and is answered with a `Res`. No response ever carries the
-// master password, a key or another record's password; `fillRequest`/`fillFromPopup` hand over one record's login and
-// password only after the service worker checked that the record belongs to the sender's page.
+// master password, a key or another record's password; `fillRequest` hands over one record's login and password only
+// after the service worker checked that the record belongs to the sender's page. The only other password that crosses
+// a message is a freshly generated one (`fillGeneratedFromPopup` → `fillGenerated`), which is not a vault secret.
 
 export type ExtStatus = 'needs-server' | 'signed-out' | 'locked' | 'unlocked';
 export interface ExtState { status: ExtStatus; serverUrl: string | null; email: string | null; lockMinutes: number; recordCount: number }
@@ -19,7 +20,14 @@ export type Req =
   | { type: 'saveNew'; title: string; url?: string; login?: string; password?: string } | { type: 'updatePassword'; id: string; password?: string }
   | { type: 'generatePassword'; opts: GenOptions }
   | { type: 'openPopup' }
-  | { type: 'fillFromPopup'; id: string; tabId: number };
+  | { type: 'fillFromPopup'; id: string; tabId: number }
+  // popup.html only. After the popup wrote to the clipboard itself: schedule the service worker's 30 s clear, which
+  // survives the popup closing. `token` is 16 random bytes (base64), unrelated to what was copied: the clipboard's
+  // content never reaches the service worker.
+  | { type: 'clipboardArm'; token: string }
+  // popup.html only → FillGeneratedResult. "Usar nesta página": the service worker checks the tab is a web page and
+  // relays the generator's password to its top frame (FillGeneratedMsg). Never logged nor stored.
+  | { type: 'fillGeneratedFromPopup'; tabId: number; password: string };
 export type Res<T = unknown> = { ok: true; data: T } | { ok: false; error: string };
 /**
  * A credential captured on submit, waiting for "Salvar?" (service worker only, in storage.session; never sent out).
@@ -45,6 +53,14 @@ export interface OpenPopupResult { opened: boolean }
  * script answers by sending `fillRequest` with this id, which the service worker validates against its real URL.
  */
 export interface FillIntoMsg { type: 'fillInto'; id: string }
+/** Service worker → content script (top frame of a web tab) after `fillGeneratedFromPopup`; answered with FillGeneratedReply. */
+export interface FillGeneratedMsg { type: 'fillGenerated'; password: string }
+/** The content script's answer to `fillGenerated`: how many password fields it filled (`ok` when at least one). */
+export interface FillGeneratedReply { ok: boolean; filled: number }
+/** `fillGeneratedFromPopup` answer. */
+export interface FillGeneratedResult { filled: number }
+/** Service worker → its offscreen document: write an empty string to the clipboard; answered `{ ok: boolean }`. */
+export interface OffscreenClearMsg { type: 'offscreenClearClipboard' }
 
 /**
  * A `{ ok: false }` answer from the service worker. Its message was written for the user (pt-BR, no secrets), unlike a

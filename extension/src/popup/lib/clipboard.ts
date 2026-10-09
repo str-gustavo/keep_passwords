@@ -4,10 +4,15 @@
 //   permission is already granted, so the popup never triggers a permission prompt 30 s after a copy;
 // - otherwise our value is cleared if it is still the last thing the popup copied (best effort, like the app does
 //   when reading is denied).
-// The timer lives in the popup: Chrome destroys it when the popup closes, so a copy made right before closing stays
-// until the user copies something else (an MV3 service worker has no clipboard access).
+// That timer lives in the popup and Chrome destroys it when the popup closes, so every copy also arms the service
+// worker's clear (sw/clipboard.ts): it sends `clipboardArm` with a random token — never the copied text — and 30 s later
+// the service worker clears the clipboard through an offscreen document, popup open or not. That clear cannot check
+// what the clipboard holds, so it is unconditional; the check above applies only while the popup stays open.
+import { toBase64 } from '@app/crypto/encoding';
+import { CLIPBOARD_CLEAR_MS } from '@/shared/constants';
+import { send } from '@/shared/messages';
 
-export const CLIPBOARD_CLEAR_MS = 30_000;
+export { CLIPBOARD_CLEAR_MS };
 
 let lastCopied: string | null = null;
 
@@ -35,9 +40,19 @@ async function clearIfStillOurs(text: string): Promise<void> {
   }
 }
 
+/** Asks the service worker to clear the clipboard in 30 s even if the popup closes. Best effort: never throws. */
+async function armServiceWorkerClear(): Promise<void> {
+  try {
+    await send<null>({ type: 'clipboardArm', token: toBase64(crypto.getRandomValues(new Uint8Array(16))) });
+  } catch {
+    // The in-popup timer still runs while the popup is open.
+  }
+}
+
 /** Writes `text` to the clipboard (throws when the browser refuses) and schedules the 30 s clear. */
 export async function copyWithAutoClear(text: string, ms = CLIPBOARD_CLEAR_MS): Promise<void> {
   await navigator.clipboard.writeText(text);
   lastCopied = text;
   setTimeout(() => { void clearIfStillOurs(text); }, ms);
+  await armServiceWorkerClear();
 }

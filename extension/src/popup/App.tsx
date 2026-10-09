@@ -119,7 +119,7 @@ function Vault({ state, version, refreshError, onState, onRefreshed, onChangeSer
         {refreshError && active !== 'settings' && <div className="px-4 pt-3"><Notice kind="error">{refreshError}</Notice></div>}
         {active === 'site' && <ThisSite tab={tab} version={version} onOpenApp={() => { void openApp().catch(() => undefined); }} />}
         {active === 'search' && <Search tab={tab} version={version} focusSignal={panelFocus?.tab === 'search' ? panelFocus.n : 0} />}
-        {active === 'generator' && <Generator />}
+        {active === 'generator' && <Generator tab={tab} />}
         {active === 'settings' && <Settings state={state} onState={onState} onRefreshed={onRefreshed} onOpenApp={openApp} onChangeServer={onChangeServer} />}
       </div>
     </>

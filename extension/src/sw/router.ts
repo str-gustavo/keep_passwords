@@ -1,7 +1,7 @@
 // The service worker's message router. Who may ask what:
 // - every message must come from this extension (sender.id); anything else is "Origem inválida";
 // - extension pages (the popup) are trusted with the account flows, search, fill-from-popup and, from popup.html only,
-//   revealing one password;
+//   revealing one password, arming the clipboard clear and relaying a generated password to the active tab;
 // - content scripts are identified by the tab they run in: they only ever see or receive records whose URL matches
 //   the tab's URL (sender.tab.url, never a URL from the payload) and, inside an iframe, the frame's URL too;
 // - a credential captured on submit (pending.ts) belongs to the tab that captured it: only that tab, on that site, sees
@@ -12,10 +12,13 @@ import { generatePassword } from '@app/generator/password';
 import { generateTotp, parseOtpauth, totpRemainingSeconds } from '@app/crypto/totp';
 import { t } from '@app/i18n/pt-br';
 import { APP_VAULT_PATH } from '@/shared/constants';
-import { urlsMatch } from '@/shared/domain';
+import { hostOf, urlsMatch } from '@/shared/domain';
 import { ExtError } from '@/shared/errors';
-import type { Credentials, FillIntoMsg, GenOptions, OpenPopupResult, Pending, PendingSummary, Req, Res, RevealedPassword, TotpCode } from '@/shared/messages';
+import type {
+  Credentials, FillGeneratedMsg, FillGeneratedResult, FillIntoMsg, GenOptions, OpenPopupResult, Pending, PendingSummary, Req, Res, RevealedPassword, TotpCode,
+} from '@/shared/messages';
 import { serverOrigin } from '@/shared/server-url';
+import { armClipboardClear, clearArmedClipboard } from './clipboard';
 import { captureChecked, dropPending, isNeverHost, neverForSite, pendingFor, sameLogin, summarize } from './pending';
 import {
   checkAutoLock, clearSession, loadSession, lockSession, requireUnlocked, saveSession, signOutSession, stateOf, statusOf, touch,
@@ -28,6 +31,8 @@ const INVALID_MESSAGE = 'Mensagem inválida';
 const NOT_THIS_SITE = 'Registro não corresponde a este site';
 const NEEDS_SERVER = 'Configure o endereço do servidor.';
 const NOTHING_PENDING = 'Nenhuma senha capturada nesta página';
+const TAB_NOT_FOUND = 'Aba não encontrada';
+const CANNOT_FILL = 'Não foi possível preencher nesta página';
 const POPUP_PATH = '/popup.html';
 
 type PageOrigin = { kind: 'page'; tabUrl: string; frameUrl: string | null; tabId: number | undefined; windowId: number | undefined };
@@ -54,6 +59,11 @@ function recordFor(r: VaultRecordLite, o: Origin): void {
 }
 function extensionOnly(o: Origin): asserts o is ExtensionOrigin {
   if (o.kind !== 'extension') throw new ExtError(INVALID_ORIGIN);
+}
+/** popup.html itself, not any other extension page (the offscreen document included). */
+function popupOnly(o: Origin): asserts o is ExtensionOrigin {
+  extensionOnly(o);
+  if (o.path !== POPUP_PATH) throw new ExtError(INVALID_ORIGIN);
 }
 /**
  * Page-originated actions extend the session only once they passed validation (popup requests are touched up front).
@@ -98,6 +108,8 @@ const isStr = (v: unknown): v is string => typeof v === 'string';
 const MAX = { url: 2048, login: 1024, password: 4096, title: 500 } as const;
 const within = (v: unknown, max: number): boolean => isStr(v) && v.length <= max;
 const optWithin = (v: unknown, max: number): boolean => v === undefined || within(v, max);
+/** clipboardArm's token: 16 random bytes in base64, so it cannot carry what was copied. */
+const CLIPBOARD_TOKEN = /^[A-Za-z0-9+/]{22}==$/;
 const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = {
   getState: () => true,
   setServer: (m) => isStr(m.url),
@@ -121,6 +133,8 @@ const SHAPES: { [K in Req['type']]: (m: Record<string, unknown>) => boolean } = 
   generatePassword: (m) => typeof m.opts === 'object' && m.opts !== null,
   openPopup: () => true,
   fillFromPopup: (m) => isStr(m.id) && Number.isInteger(m.tabId),
+  clipboardArm: (m) => isStr(m.token) && CLIPBOARD_TOKEN.test(m.token),
+  fillGeneratedFromPopup: (m) => Number.isInteger(m.tabId) && within(m.password, MAX.password) && m.password !== '',
 };
 function isReq(v: unknown): v is Req {
   if (!v || typeof v !== 'object') return false;
@@ -193,10 +207,12 @@ async function route(req: Req, o: Origin): Promise<Res> {
       return ok(await currentState());
     case 'lock':
       await lockSession();
+      await clearArmedClipboard(); // a password copied from the popup does not outlive the lock (never throws)
       return ok(await currentState());
     case 'signOut':
       extensionOnly(o);
       await signOutSession();
+      await clearArmedClipboard();
       return ok(await currentState());
     case 'refresh':
       extensionOnly(o);
@@ -238,8 +254,7 @@ async function route(req: Req, o: Origin): Promise<Res> {
       return ok(await totpCode(r.totp));
     }
     case 'revealPassword': {
-      extensionOnly(o);
-      if (o.path !== POPUP_PATH) throw new ExtError(INVALID_ORIGIN);
+      popupOnly(o);
       const r = findRecord((await requireUnlocked()).vault, req.id);
       return ok<RevealedPassword>({ password: r.password });
     }
@@ -247,12 +262,27 @@ async function route(req: Req, o: Origin): Promise<Res> {
       extensionOnly(o);
       const r = findRecord((await requireUnlocked()).vault, req.id);
       let tab: chrome.tabs.Tab;
-      try { tab = await chrome.tabs.get(req.tabId); } catch { throw new ExtError('Aba não encontrada'); }
+      try { tab = await chrome.tabs.get(req.tabId); } catch { throw new ExtError(TAB_NOT_FOUND); }
       if (!tab.url || !urlsMatch(r.url, tab.url)) throw new ExtError(NOT_THIS_SITE);
       // No secret leaves here: the tab's top frame answers with fillRequest(id), validated against its real URL.
       const msg: FillIntoMsg = { type: 'fillInto', id: r.id };
-      try { await chrome.tabs.sendMessage(req.tabId, msg, { frameId: 0 }); } catch { throw new ExtError('Não foi possível preencher nesta página'); }
+      try { await chrome.tabs.sendMessage(req.tabId, msg, { frameId: 0 }); } catch { throw new ExtError(CANNOT_FILL); }
       return ok(null);
+    }
+    case 'fillGeneratedFromPopup': {
+      // "Usar nesta página" in the popup's generator. The password was generated in the popup and is not a vault
+      // secret, so it may go to the web page the user is looking at (its top frame only); it is never logged or stored.
+      popupOnly(o);
+      let tab: chrome.tabs.Tab;
+      try { tab = await chrome.tabs.get(req.tabId); } catch { throw new ExtError(TAB_NOT_FOUND); }
+      if (!tab.url || hostOf(tab.url) === null) throw new ExtError('Não é possível preencher nesta página');
+      const msg: FillGeneratedMsg = { type: 'fillGenerated', password: req.password };
+      let reply: unknown;
+      try { reply = await chrome.tabs.sendMessage(req.tabId, msg, { frameId: 0 }); } catch { throw new ExtError(CANNOT_FILL); }
+      const filled = (reply as { filled?: unknown } | null | undefined)?.filled;
+      if (typeof filled !== 'number' || !Number.isInteger(filled) || filled < 0) throw new ExtError(CANNOT_FILL);
+      if (filled === 0) throw new ExtError('Nenhum campo de senha encontrado nesta página');
+      return ok<FillGeneratedResult>({ filled });
     }
 
     // ---- captured credentials (a page only ever sees its own tab's capture, and never its password) ----
@@ -344,6 +374,11 @@ async function route(req: Req, o: Origin): Promise<Res> {
     case 'generatePassword':
       await touchFromPage(o);
       return ok<{ password: string }>({ password: generatePassword(genOptions(req.opts)) });
+    case 'clipboardArm':
+      // The popup already wrote to the clipboard; only a random token arrives here (see clipboard.ts).
+      popupOnly(o);
+      await armClipboardClear(req.token);
+      return ok(null);
     case 'openPopup': {
       try {
         await chrome.action.openPopup(o.kind === 'page' && o.windowId !== undefined ? { windowId: o.windowId } : undefined);

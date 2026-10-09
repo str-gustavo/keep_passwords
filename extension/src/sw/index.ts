@@ -1,7 +1,8 @@
 // Service worker entry: wires Chrome events to the router, the auto-lock alarm and the action badge.
 // All state lives in chrome.storage.session (see session.ts), so the worker may be stopped and restarted at any time.
-import { AUTOLOCK_ALARM, BADGE_COLOR, SESSION_KEY } from '@/shared/constants';
+import { AUTOLOCK_ALARM, BADGE_COLOR, CLIPBOARD_ALARM, SESSION_KEY } from '@/shared/constants';
 import type { Req, Res } from '@/shared/messages';
+import { onClipboardAlarm } from './clipboard';
 import { purgeExpiredPending } from './pending';
 import { handle } from './router';
 import { checkAutoLock, loadSession, statusOf } from './session';
@@ -45,6 +46,8 @@ chrome.runtime.onStartup.addListener(onBoot);
 void chrome.alarms.get(AUTOLOCK_ALARM).then((a) => (a ? undefined : ensureAlarm())).catch(() => undefined);
 
 chrome.alarms.onAlarm.addListener((alarm) => {
+  // 30 s after the popup's last copy (clipboard.ts): clear it through the offscreen document, popup open or not.
+  if (alarm.name === CLIPBOARD_ALARM) return onClipboardAlarm();
   if (alarm.name !== AUTOLOCK_ALARM) return;
   const quiet = (p: Promise<unknown>) => p.then(() => undefined, () => undefined);
   return Promise.all([quiet(checkAutoLock()), quiet(purgeExpiredPending())]).then(() => undefined);
