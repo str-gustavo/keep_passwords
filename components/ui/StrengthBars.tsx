@@ -14,7 +14,7 @@ export function StrengthBars({ score, label }: { score: 0 | 1 | 2 | 3 | 4 | null
   return (
     <div className="mt-2">
       <div className="flex gap-1" aria-hidden="true">
-        {[1, 2, 3, 4].map((i) => <span key={i} data-seg className={cn('h-1.5 flex-1 rounded-full transition-colors', i <= lit ? fill : 'bg-surface-2')} />)}
+        {[1, 2, 3, 4].map((i) => <span key={i} data-seg className={cn('h-1.5 flex-1 rounded-full transition-colors', i <= lit ? fill : 'bg-border')} />)}
       </div>
       <p className="mt-1 text-xs text-fg-muted" aria-live="polite">{label}</p>
     </div>

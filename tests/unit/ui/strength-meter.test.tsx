@@ -7,15 +7,15 @@ import { StrengthMeter } from '@/components/vault/StrengthMeter';
 afterEach(cleanup);
 
 const segs = (root: ParentNode) => [...root.querySelectorAll('[data-seg]')];
-const fill = (seg: Element) => seg.className.match(/\bbg-(danger|primary|success|surface-2)\b/)?.[1] ?? '?';
+const fill = (seg: Element) => seg.className.match(/\bbg-(danger|primary|success|border)\b/)?.[1] ?? '?';
 
 describe('StrengthBars', () => {
-  it('quatro segmentos finos; os preenchidos usam success/primary/danger, os vazios surface-2', () => {
+  it('quatro segmentos finos; os preenchidos usam success/primary/danger, os vazios border', () => {
     const { container } = render(<StrengthBars score={2} label="Força da senha: Razoável" />);
     const s = segs(container);
     expect(s.length).toBe(4);
     for (const seg of s) expect(seg.className).toMatch(/\bh-1\.5\b/);
-    expect(s.map(fill)).toEqual(['primary', 'primary', 'surface-2', 'surface-2']);
+    expect(s.map(fill)).toEqual(['primary', 'primary', 'border', 'border']);
     const label = screen.getByText('Força da senha: Razoável');
     expect(label.className).toMatch(/\btext-xs\b/);
     expect(label.className).toMatch(/\btext-fg-muted\b/);
@@ -29,16 +29,16 @@ describe('StrengthBars', () => {
       return out;
     };
     // A non-empty password always lights the first segment, so "Muito fraca" still shows red.
-    expect(filled(0)).toEqual(['danger', 'surface-2', 'surface-2', 'surface-2']);
-    expect(filled(1)).toEqual(['danger', 'surface-2', 'surface-2', 'surface-2']);
-    expect(filled(2)).toEqual(['primary', 'primary', 'surface-2', 'surface-2']);
-    expect(filled(3)).toEqual(['success', 'success', 'success', 'surface-2']);
+    expect(filled(0)).toEqual(['danger', 'border', 'border', 'border']);
+    expect(filled(1)).toEqual(['danger', 'border', 'border', 'border']);
+    expect(filled(2)).toEqual(['primary', 'primary', 'border', 'border']);
+    expect(filled(3)).toEqual(['success', 'success', 'success', 'border']);
     expect(filled(4)).toEqual(['success', 'success', 'success', 'success']);
   });
 
   it('sem senha (score null) nenhum segmento acende', () => {
     const { container } = render(<StrengthBars score={null} label="Use ao menos 12 caracteres" />);
-    expect(segs(container).map(fill)).toEqual(['surface-2', 'surface-2', 'surface-2', 'surface-2']);
+    expect(segs(container).map(fill)).toEqual(['border', 'border', 'border', 'border']);
   });
 });
 
